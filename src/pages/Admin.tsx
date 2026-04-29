@@ -50,27 +50,68 @@ interface PurchaseRow {
   profiles?: { display_name: string | null };
 }
 
+interface ProductRow {
+  id: string;
+  name: string;
+  description: string | null;
+  price_eur: number;
+  image_url: string | null;
+  active: boolean;
+  stock: number | null;
+}
+
 const Admin = () => {
   const [users, setUsers] = useState<AdminProfile[]>([]);
   const [credits, setCredits] = useState<CreditReq[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
+  const [products, setProducts] = useState<ProductRow[]>([]);
   const [creditAmount, setCreditAmount] = useState<Record<string, number>>({});
+  const [newProd, setNewProd] = useState({ name: "", description: "", price_eur: 0, image_url: "", stock: "" });
 
   const load = async () => {
-    const [u, c, p, pu] = await Promise.all([
+    const [u, c, p, pu, pr] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("credit_requests").select("*, profiles(display_name)").order("created_at", { ascending: false }),
       supabase.from("payments").select("*, profiles(display_name)").order("created_at", { ascending: false }).limit(50),
       supabase.from("purchases").select("*, profiles(display_name)").order("created_at", { ascending: false }).limit(50),
+      supabase.from("products").select("*").order("created_at", { ascending: false }),
     ]);
     setUsers((u.data ?? []) as AdminProfile[]);
     setCredits((c.data ?? []) as CreditReq[]);
     setPayments((p.data ?? []) as PaymentRow[]);
     setPurchases((pu.data ?? []) as PurchaseRow[]);
+    setProducts((pr.data ?? []) as ProductRow[]);
   };
 
   useEffect(() => { load(); }, []);
+
+  const createProduct = async () => {
+    if (!newProd.name || newProd.price_eur <= 0) return toast.error("Nom et prix requis");
+    const { error } = await supabase.from("products").insert({
+      name: newProd.name,
+      description: newProd.description || null,
+      price_eur: newProd.price_eur,
+      image_url: newProd.image_url || null,
+      stock: newProd.stock === "" ? null : Number(newProd.stock),
+      active: true,
+    });
+    if (error) return toast.error(error.message);
+    toast.success("Produit créé");
+    setNewProd({ name: "", description: "", price_eur: 0, image_url: "", stock: "" });
+    load();
+  };
+
+  const toggleProduct = async (id: string, active: boolean) => {
+    const { error } = await supabase.from("products").update({ active }).eq("id", id);
+    if (error) toast.error(error.message); else load();
+  };
+
+  const deleteProduct = async (id: string) => {
+    if (!confirm("Supprimer ce produit ?")) return;
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    if (error) toast.error(error.message); else { toast.success("Supprimé"); load(); }
+  };
 
   const setStatus = async (id: string, status: "approved" | "rejected") => {
     const { error } = await supabase.from("profiles").update({ status }).eq("id", id);
