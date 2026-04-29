@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.create-api-key]
 verify_jwt = true
+
+[functions.stripe-checkout]
+verify_jwt = true
+
+[functions.stripe-verify]
+verify_jwt = true
