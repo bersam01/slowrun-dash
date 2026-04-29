@@ -69,7 +69,7 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshPr
 
     if (error) {
       console.error("Unable to read profile", error);
-      const code = String(error.code ?? error.status ?? "");
+      const code = String(error.code ?? "");
       if (!NO_PROFILE_FOUND_CODES.has(code)) {
         return null;
       }
