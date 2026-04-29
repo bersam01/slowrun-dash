@@ -9,7 +9,7 @@ import Login from "./pages/Login.tsx";
 import Pending from "./pages/Pending.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
 import Credit from "./pages/Credit.tsx";
-import ApiKeys from "./pages/ApiKeys.tsx";
+import Products from "./pages/Products.tsx";
 import Admin from "./pages/Admin.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
 
@@ -27,7 +27,7 @@ const App = () => (
           <Route path="/pending" element={<Pending />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/credit" element={<ProtectedRoute><Credit /></ProtectedRoute>} />
-          <Route path="/api-keys" element={<ProtectedRoute><ApiKeys /></ProtectedRoute>} />
+          <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>

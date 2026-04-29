@@ -117,8 +117,8 @@
   }
 
   .stat-card-neutral {
-    background: linear-gradient(135deg, hsl(220 20% 96%) 0%, hsl(210 30% 92%) 100%);
-    color: hsl(220 30% 8%);
+    background: linear-gradient(135deg, hsl(220 22% 22%) 0%, hsl(220 25% 16%) 100%);
+    color: hsl(210 40% 98%);
   }
 
   .text-gradient-primary {

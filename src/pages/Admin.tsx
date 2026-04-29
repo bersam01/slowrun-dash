@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus } from "lucide-react";
+import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
@@ -47,27 +50,68 @@ interface PurchaseRow {
   profiles?: { display_name: string | null };
 }
 
+interface ProductRow {
+  id: string;
+  name: string;
+  description: string | null;
+  price_eur: number;
+  image_url: string | null;
+  active: boolean;
+  stock: number | null;
+}
+
 const Admin = () => {
   const [users, setUsers] = useState<AdminProfile[]>([]);
   const [credits, setCredits] = useState<CreditReq[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
+  const [products, setProducts] = useState<ProductRow[]>([]);
   const [creditAmount, setCreditAmount] = useState<Record<string, number>>({});
+  const [newProd, setNewProd] = useState({ name: "", description: "", price_eur: 0, image_url: "", stock: "" });
 
   const load = async () => {
-    const [u, c, p, pu] = await Promise.all([
+    const [u, c, p, pu, pr] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("credit_requests").select("*, profiles(display_name)").order("created_at", { ascending: false }),
       supabase.from("payments").select("*, profiles(display_name)").order("created_at", { ascending: false }).limit(50),
       supabase.from("purchases").select("*, profiles(display_name)").order("created_at", { ascending: false }).limit(50),
+      supabase.from("products").select("*").order("created_at", { ascending: false }),
     ]);
     setUsers((u.data ?? []) as AdminProfile[]);
     setCredits((c.data ?? []) as CreditReq[]);
     setPayments((p.data ?? []) as PaymentRow[]);
     setPurchases((pu.data ?? []) as PurchaseRow[]);
+    setProducts((pr.data ?? []) as ProductRow[]);
   };
 
   useEffect(() => { load(); }, []);
+
+  const createProduct = async () => {
+    if (!newProd.name || newProd.price_eur <= 0) return toast.error("Nom et prix requis");
+    const { error } = await supabase.from("products").insert({
+      name: newProd.name,
+      description: newProd.description || null,
+      price_eur: newProd.price_eur,
+      image_url: newProd.image_url || null,
+      stock: newProd.stock === "" ? null : Number(newProd.stock),
+      active: true,
+    });
+    if (error) return toast.error(error.message);
+    toast.success("Produit créé");
+    setNewProd({ name: "", description: "", price_eur: 0, image_url: "", stock: "" });
+    load();
+  };
+
+  const toggleProduct = async (id: string, active: boolean) => {
+    const { error } = await supabase.from("products").update({ active }).eq("id", id);
+    if (error) toast.error(error.message); else load();
+  };
+
+  const deleteProduct = async (id: string) => {
+    if (!confirm("Supprimer ce produit ?")) return;
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    if (error) toast.error(error.message); else { toast.success("Supprimé"); load(); }
+  };
 
   const setStatus = async (id: string, status: "approved" | "rejected") => {
     const { error } = await supabase.from("profiles").update({ status }).eq("id", id);
@@ -122,10 +166,11 @@ const Admin = () => {
       </div>
 
       <Tabs defaultValue="approvals" className="mt-8">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-6">
           <TabsTrigger value="approvals">Approbations ({pending.length})</TabsTrigger>
           <TabsTrigger value="users"><Users className="mr-1 h-4 w-4" />Utilisateurs</TabsTrigger>
           <TabsTrigger value="credits"><Wallet className="mr-1 h-4 w-4" />Crédits</TabsTrigger>
+          <TabsTrigger value="products"><Package className="mr-1 h-4 w-4" />Produits</TabsTrigger>
           <TabsTrigger value="payments">Paiements</TabsTrigger>
           <TabsTrigger value="purchases"><ShoppingCart className="mr-1 h-4 w-4" />Achats</TabsTrigger>
         </TabsList>
@@ -202,6 +247,61 @@ const Admin = () => {
                       <Button size="sm" variant="destructive" onClick={() => handleCreditReq(c.id, false)}>Refuser</Button>
                     </>
                   )}
+                </div>
+              </div>
+            ))}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="products" className="mt-4">
+          <Card className="glass-card p-6">
+            <h3 className="text-lg font-semibold">Nouveau produit</h3>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div>
+                <Label>Nom *</Label>
+                <Input value={newProd.name} onChange={(e) => setNewProd({ ...newProd, name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Prix (€) *</Label>
+                <Input type="number" min={0} step="0.01" value={newProd.price_eur || ""} onChange={(e) => setNewProd({ ...newProd, price_eur: Number(e.target.value) })} />
+              </div>
+              <div>
+                <Label>URL image</Label>
+                <Input value={newProd.image_url} onChange={(e) => setNewProd({ ...newProd, image_url: e.target.value })} placeholder="https://..." />
+              </div>
+              <div>
+                <Label>Stock (vide = illimité)</Label>
+                <Input type="number" min={0} value={newProd.stock} onChange={(e) => setNewProd({ ...newProd, stock: e.target.value })} />
+              </div>
+              <div className="md:col-span-2">
+                <Label>Description</Label>
+                <Textarea value={newProd.description} onChange={(e) => setNewProd({ ...newProd, description: e.target.value })} rows={2} />
+              </div>
+            </div>
+            <Button className="mt-4" onClick={createProduct}><Plus className="mr-1 h-4 w-4" />Créer le produit</Button>
+          </Card>
+
+          <Card className="glass-card mt-4 p-6">
+            <h3 className="mb-4 text-lg font-semibold">Catalogue ({products.length})</h3>
+            {products.length === 0 ? (
+              <div className="py-6 text-center text-muted-foreground">Aucun produit.</div>
+            ) : products.map((p) => (
+              <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 py-3 last:border-0">
+                <div className="flex items-center gap-3">
+                  {p.image_url && <img src={p.image_url} className="h-12 w-12 rounded object-cover" alt="" />}
+                  <div>
+                    <div className="font-medium">{p.name} — {Number(p.price_eur).toFixed(2)} €</div>
+                    <div className="text-xs text-muted-foreground">{p.description ?? "—"} • Stock: {p.stock ?? "∞"}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Switch checked={p.active} onCheckedChange={(v) => toggleProduct(p.id, v)} />
+                    <span className="text-xs">{p.active ? "Actif" : "Inactif"}</span>
+                  </div>
+                  <Button size="sm" variant="destructive" onClick={() => deleteProduct(p.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             ))}

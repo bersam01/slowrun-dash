@@ -79,7 +79,7 @@ const Credit = () => {
         <h1 className="text-3xl font-bold tracking-tight">
           Créditer <span className="text-gradient-primary">mon solde</span>
         </h1>
-        <p className="mt-1 text-muted-foreground">1 quota = 1 €. Choisis un montant et règle par carte.</p>
+        <p className="mt-1 text-muted-foreground">Choisis un montant et règle par carte. Ton solde est en euros.</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -117,8 +117,8 @@ const Credit = () => {
 
           <div className="mt-6 rounded-xl border border-primary/30 bg-primary/5 p-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Tu vas recevoir</span>
-              <span className="text-2xl font-bold text-gradient-primary">{amount.toFixed(2)} q</span>
+              <span className="text-sm text-muted-foreground">Tu vas être crédité de</span>
+              <span className="text-2xl font-bold text-gradient-primary">{amount.toFixed(2)} €</span>
             </div>
           </div>
 
@@ -140,7 +140,7 @@ const Credit = () => {
             <li>• Choisis un montant en euros (min 5 €).</li>
             <li>• Paye par carte via Stripe — le crédit est ajouté automatiquement.</li>
             <li>• Ou demande un crédit manuel et l'admin validera ton paiement (virement, etc.).</li>
-            <li>• Tes quotas sont utilisables via le bot Discord pour acheter des paniers.</li>
+            <li>• Ton solde en € est utilisable pour acheter des produits ou via le bot Discord.</li>
           </ul>
         </Card>
       </div>
