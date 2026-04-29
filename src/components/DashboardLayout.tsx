@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
-import { LayoutDashboard, ShieldCheck, KeyRound, LogOut, Wallet } from "lucide-react";
+import { LayoutDashboard, ShieldCheck, Package, LogOut, Wallet } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +23,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navItems = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/credit", label: "Créditer", icon: Wallet },
-    { to: "/api-keys", label: "API Keys", icon: KeyRound },
+    { to: "/products", label: "Produits", icon: Package },
     ...(isAdmin ? [{ to: "/admin", label: "Admin", icon: ShieldCheck }] : []),
   ];
 
