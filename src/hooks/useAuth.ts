@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
@@ -45,7 +45,7 @@ const buildProfilePayload = (user: User) => {
   };
 };
 
-export const useAuth = (): AuthState & { signOut: () => Promise<void> } => {
+export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshProfile: () => Promise<void> } => {
   const [state, setState] = useState<AuthState>({
     loading: true,
     session: null,
@@ -54,48 +54,63 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void> } => {
     isAdmin: false,
   });
 
+  const loadProfile = useCallback(async (user: User | null) => {
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (data) return data as Profile;
+
+    if (error) {
+      console.error("Unable to read profile", error);
+    }
+
+    const { error: insertError } = await supabase
+      .from("profiles")
+      .insert(buildProfilePayload(user));
+
+    if (insertError) {
+      console.error("Unable to create missing profile", insertError);
+      return null;
+    }
+
+    const { data: createdProfile, error: createdProfileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (createdProfileError) {
+      console.error("Unable to reload created profile", createdProfileError);
+    }
+
+    return (createdProfile as Profile | null) ?? null;
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const profile = await loadProfile(session?.user ?? null);
+
+    setState({
+      loading: false,
+      session,
+      user: session?.user ?? null,
+      profile,
+      isAdmin: Boolean(profile?.is_admin),
+    });
+  }, [loadProfile]);
+
   useEffect(() => {
     if (!isSupabaseConfigured) {
       setState((s) => ({ ...s, loading: false }));
       return;
     }
-
-    const loadProfile = async (user: User | null) => {
-      if (!user) return null;
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (data) return data as Profile;
-
-      if (error) {
-        console.error("Unable to read profile", error);
-      }
-
-      const { error: insertError } = await supabase
-        .from("profiles")
-        .insert(buildProfilePayload(user));
-
-      if (insertError) {
-        console.error("Unable to create missing profile", insertError);
-        return null;
-      }
-
-      const { data: createdProfile, error: createdProfileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (createdProfileError) {
-        console.error("Unable to reload created profile", createdProfileError);
-      }
-
-      return (createdProfile as Profile | null) ?? null;
-    };
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       setState((s) => ({ ...s, session, user: session?.user ?? null }));
@@ -124,11 +139,11 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void> } => {
     });
 
     return () => subscription.subscription.unsubscribe();
-  }, []);
+  }, [loadProfile]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
   };
 
-  return { ...state, signOut };
+  return { ...state, signOut, refreshProfile };
 };

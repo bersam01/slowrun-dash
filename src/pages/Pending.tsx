@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Clock, XCircle, Loader2, LogOut } from "lucide-react";
 
 const Pending = () => {
-  const { loading, user, profile, signOut } = useAuth();
+  const { loading, user, profile, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -15,6 +15,16 @@ const Pending = () => {
     if (!user) navigate("/login");
     else if (profile?.status === "approved") navigate("/dashboard");
   }, [loading, user, profile, navigate]);
+
+  useEffect(() => {
+    if (!user || profile?.status === "approved") return;
+
+    const interval = window.setInterval(() => {
+      void refreshProfile();
+    }, 3000);
+
+    return () => window.clearInterval(interval);
+  }, [user, profile?.status, refreshProfile]);
 
   if (loading) {
     return (
@@ -52,6 +62,12 @@ const Pending = () => {
             ? "Ton compte a été refusé par un administrateur. Si tu penses qu'il s'agit d'une erreur, contacte le support sur Discord."
             : "Ton compte a bien été créé. Un administrateur va l'examiner sous peu. Tu recevras l'accès dès qu'il sera validé."}
         </p>
+
+        {!rejected && (
+          <Button variant="secondary" className="mt-6 w-full" onClick={() => void refreshProfile()}>
+            Actualiser le statut
+          </Button>
+        )}
 
         {profile && (
           <div className="mt-6 rounded-xl border border-border/60 bg-secondary/30 p-4">
