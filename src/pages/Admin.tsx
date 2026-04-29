@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Users, Wallet, ShoppingCart, Plus } from "lucide-react";
+import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
@@ -75,14 +75,24 @@ const Admin = () => {
     else { toast.success(`Compte ${status === "approved" ? "approuvé" : "refusé"}`); load(); }
   };
 
-  const manualCredit = async (userId: string) => {
-    const amount = creditAmount[userId];
-    if (!amount || amount <= 0) return toast.error("Montant invalide");
-    const { error } = await supabase.functions.invoke("admin-credit", {
-      body: { user_id: userId, amount, note: "Crédit manuel admin" },
+  const adjustCredit = async (userId: string, sign: 1 | -1) => {
+    const raw = creditAmount[userId];
+    if (!raw || raw <= 0) return toast.error("Montant invalide");
+    const amount = raw * sign;
+    const { data, error } = await supabase.functions.invoke("admin-credit", {
+      body: { user_id: userId, amount, note: sign > 0 ? "Crédit manuel admin" : "Retrait manuel admin" },
     });
-    if (error) toast.error(error.message);
-    else { toast.success(`+${amount} € crédité`); setCreditAmount((s) => ({ ...s, [userId]: 0 })); load(); }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (data?.error) {
+      toast.error(data.error);
+      return;
+    }
+    toast.success(sign > 0 ? `+${raw} q crédité` : `-${raw} q retiré`);
+    setCreditAmount((s) => ({ ...s, [userId]: 0 }));
+    load();
   };
 
   const handleCreditReq = async (id: string, approve: boolean) => {
@@ -162,8 +172,11 @@ const Admin = () => {
                     onChange={(e) => setCreditAmount((s) => ({ ...s, [u.id]: Number(e.target.value) }))}
                     className="w-24"
                   />
-                  <Button size="sm" variant="outline" onClick={() => manualCredit(u.id)}>
+                  <Button size="sm" variant="outline" onClick={() => adjustCredit(u.id, 1)}>
                     <Plus className="mr-1 h-4 w-4" />Créditer
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => adjustCredit(u.id, -1)}>
+                    <Minus className="mr-1 h-4 w-4" />Retirer
                   </Button>
                 </div>
               </div>
