@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { corsHeaders } from "jsr:@supabase/supabase-js@2/cors";
 
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
