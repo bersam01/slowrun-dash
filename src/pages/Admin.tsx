@@ -166,10 +166,11 @@ const Admin = () => {
       </div>
 
       <Tabs defaultValue="approvals" className="mt-8">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-6">
           <TabsTrigger value="approvals">Approbations ({pending.length})</TabsTrigger>
           <TabsTrigger value="users"><Users className="mr-1 h-4 w-4" />Utilisateurs</TabsTrigger>
           <TabsTrigger value="credits"><Wallet className="mr-1 h-4 w-4" />Crédits</TabsTrigger>
+          <TabsTrigger value="products"><Package className="mr-1 h-4 w-4" />Produits</TabsTrigger>
           <TabsTrigger value="payments">Paiements</TabsTrigger>
           <TabsTrigger value="purchases"><ShoppingCart className="mr-1 h-4 w-4" />Achats</TabsTrigger>
         </TabsList>
