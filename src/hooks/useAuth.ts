@@ -39,26 +39,15 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void> } => {
 
     const loadProfile = async (user: User | null) => {
       if (!user) return null;
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .maybeSingle();
-      console.log("[useAuth] loadProfile", {
-        userId: user.id,
-        email: user.email,
-        data,
-        error,
-      });
       return (data as Profile | null) ?? null;
     };
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log("[useAuth] onAuthStateChange", {
-        event: _event,
-        userId: session?.user?.id ?? null,
-        email: session?.user?.email ?? null,
-      });
       setState((s) => ({ ...s, session, user: session?.user ?? null }));
       // Defer profile fetch to avoid deadlock
       setTimeout(async () => {
@@ -74,10 +63,6 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void> } => {
     });
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log("[useAuth] getSession", {
-        userId: session?.user?.id ?? null,
-        email: session?.user?.email ?? null,
-      });
       const profile = await loadProfile(session?.user ?? null);
       setState({
         loading: false,
