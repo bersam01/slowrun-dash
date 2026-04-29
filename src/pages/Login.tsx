@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -29,11 +29,18 @@ const Login = () => {
       toast.error("Connecte d'abord ton projet Supabase via le bouton en haut à droite.");
       return;
     }
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "discord",
-      options: { redirectTo: `${window.location.origin}/dashboard` },
-    });
-    if (error) toast.error(error.message);
+
+    try {
+      const redirectTo = `${window.location.origin}/dashboard`;
+      const params = new URLSearchParams({
+        provider: "discord",
+        redirect_to: redirectTo,
+      });
+
+      window.location.href = `https://jisiahjqkxuctzmrsqzd.supabase.co/auth/v1/authorize?${params.toString()}`;
+    } catch {
+      toast.error("Impossible de lancer la connexion Discord.");
+    }
   };
 
   if (loading) {
