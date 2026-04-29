@@ -163,7 +163,7 @@ const Admin = () => {
                     <div className="text-xs text-muted-foreground">Discord: {u.discord_id ?? "—"}</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={u.status === "approved" ? "default" : u.status === "pending" ? "secondary" : "destructive"}>{u.status}</Badge>
                   <Input
                     type="number"
