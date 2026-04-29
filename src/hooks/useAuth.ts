@@ -22,6 +22,29 @@ interface AuthState {
   isAdmin: boolean;
 }
 
+const buildProfilePayload = (user: User) => {
+  const metadata = user.user_metadata ?? {};
+
+  return {
+    id: user.id,
+    discord_id:
+      metadata.provider_id ??
+      metadata.sub ??
+      metadata.preferred_username ??
+      null,
+    display_name:
+      metadata.full_name ??
+      metadata.global_name ??
+      metadata.name ??
+      metadata.user_name ??
+      user.email ??
+      null,
+    avatar_url: metadata.avatar_url ?? metadata.picture ?? null,
+    status: "pending" as const,
+    is_admin: false,
+  };
+};
+
 export const useAuth = (): AuthState & { signOut: () => Promise<void> } => {
   const [state, setState] = useState<AuthState>({
     loading: true,
@@ -39,12 +62,39 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void> } => {
 
     const loadProfile = async (user: User | null) => {
       if (!user) return null;
-      const { data } = await supabase
+
+      const { data, error } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .maybeSingle();
-      return (data as Profile | null) ?? null;
+
+      if (data) return data as Profile;
+
+      if (error) {
+        console.error("Unable to read profile", error);
+      }
+
+      const { error: insertError } = await supabase
+        .from("profiles")
+        .insert(buildProfilePayload(user));
+
+      if (insertError) {
+        console.error("Unable to create missing profile", insertError);
+        return null;
+      }
+
+      const { data: createdProfile, error: createdProfileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (createdProfileError) {
+        console.error("Unable to reload created profile", createdProfileError);
+      }
+
+      return (createdProfile as Profile | null) ?? null;
     };
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
