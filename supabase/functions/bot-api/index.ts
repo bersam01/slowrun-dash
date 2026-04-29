@@ -1,3 +1,4 @@
+// redeploy: bot-api v2
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const corsHeaders = {

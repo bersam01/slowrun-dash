@@ -1,3 +1,4 @@
+// redeploy: stripe-checkout v2
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "jsr:@supabase/supabase-js@2/cors";
