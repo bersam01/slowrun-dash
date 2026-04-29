@@ -1,14 +1,10 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "jsr:@supabase/supabase-js@2/cors";
+import Stripe from "npm:stripe@18.5.0";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -19,9 +15,20 @@ Deno.serve(async (req) => {
       });
     }
 
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+
+    if (!supabaseUrl || !supabaseAnonKey || !stripeKey) {
+      return new Response(JSON.stringify({ error: "Missing server configuration" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
+      supabaseUrl,
+      supabaseAnonKey,
       { global: { headers: { Authorization: authHeader } } }
     );
 
@@ -36,7 +43,7 @@ Deno.serve(async (req) => {
     const userId = claims.claims.sub as string;
     const userEmail = (claims.claims.email as string) ?? undefined;
 
-    const { amount } = await req.json();
+    const { amount } = await req.json().catch(() => ({ amount: null }));
     const eur = Number(amount);
     if (!Number.isFinite(eur) || eur < 5 || eur > 5000) {
       return new Response(JSON.stringify({ error: "Montant invalide (5-5000 €)" }), {
@@ -45,8 +52,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY")!;
-    const stripe = new Stripe(stripeKey, { apiVersion: "2024-06-20" });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
     const origin = req.headers.get("origin") ?? "https://slowrun-dash.lovable.app";
 
