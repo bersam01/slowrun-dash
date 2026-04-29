@@ -14,6 +14,8 @@ export interface Profile {
   created_at: string;
 }
 
+const NO_PROFILE_FOUND_CODES = new Set(["PGRST116", "406"]);
+
 interface AuthState {
   loading: boolean;
   session: Session | null;
@@ -67,6 +69,10 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshPr
 
     if (error) {
       console.error("Unable to read profile", error);
+      const code = String(error.code ?? error.status ?? "");
+      if (!NO_PROFILE_FOUND_CODES.has(code)) {
+        return null;
+      }
     }
 
     const { error: insertError } = await supabase
