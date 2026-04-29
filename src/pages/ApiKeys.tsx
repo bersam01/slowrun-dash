@@ -38,9 +38,31 @@ const ApiKeys = () => {
 
   const create = async () => {
     if (!name.trim()) return toast.error("Donne un nom à ta clé.");
-    const { data, error } = await supabase.functions.invoke("create-api-key", { body: { name } });
-    if (error) return toast.error(error.message);
-    setRevealed(data.key);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      toast.error("Ta session a expiré, reconnecte-toi.");
+      return;
+    }
+
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL ?? "https://jisiahjqkxuctzmrsqzd.supabase.co"}/functions/v1/create-api-key`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "sb_publishable_0dgR1Ed5bYz8mx6cGapjqw_le7V33t2",
+      },
+      body: JSON.stringify({ name }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      return toast.error(payload?.error ?? `Erreur ${response.status}`);
+    }
+
+    setRevealed(payload.key);
     setName("");
     load();
   };
