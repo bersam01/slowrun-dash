@@ -253,6 +253,61 @@ const Admin = () => {
           </Card>
         </TabsContent>
 
+        <TabsContent value="products" className="mt-4">
+          <Card className="glass-card p-6">
+            <h3 className="text-lg font-semibold">Nouveau produit</h3>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div>
+                <Label>Nom *</Label>
+                <Input value={newProd.name} onChange={(e) => setNewProd({ ...newProd, name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Prix (€) *</Label>
+                <Input type="number" min={0} step="0.01" value={newProd.price_eur || ""} onChange={(e) => setNewProd({ ...newProd, price_eur: Number(e.target.value) })} />
+              </div>
+              <div>
+                <Label>URL image</Label>
+                <Input value={newProd.image_url} onChange={(e) => setNewProd({ ...newProd, image_url: e.target.value })} placeholder="https://..." />
+              </div>
+              <div>
+                <Label>Stock (vide = illimité)</Label>
+                <Input type="number" min={0} value={newProd.stock} onChange={(e) => setNewProd({ ...newProd, stock: e.target.value })} />
+              </div>
+              <div className="md:col-span-2">
+                <Label>Description</Label>
+                <Textarea value={newProd.description} onChange={(e) => setNewProd({ ...newProd, description: e.target.value })} rows={2} />
+              </div>
+            </div>
+            <Button className="mt-4" onClick={createProduct}><Plus className="mr-1 h-4 w-4" />Créer le produit</Button>
+          </Card>
+
+          <Card className="glass-card mt-4 p-6">
+            <h3 className="mb-4 text-lg font-semibold">Catalogue ({products.length})</h3>
+            {products.length === 0 ? (
+              <div className="py-6 text-center text-muted-foreground">Aucun produit.</div>
+            ) : products.map((p) => (
+              <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 py-3 last:border-0">
+                <div className="flex items-center gap-3">
+                  {p.image_url && <img src={p.image_url} className="h-12 w-12 rounded object-cover" alt="" />}
+                  <div>
+                    <div className="font-medium">{p.name} — {Number(p.price_eur).toFixed(2)} €</div>
+                    <div className="text-xs text-muted-foreground">{p.description ?? "—"} • Stock: {p.stock ?? "∞"}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Switch checked={p.active} onCheckedChange={(v) => toggleProduct(p.id, v)} />
+                    <span className="text-xs">{p.active ? "Actif" : "Inactif"}</span>
+                  </div>
+                  <Button size="sm" variant="destructive" onClick={() => deleteProduct(p.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </Card>
+        </TabsContent>
+
         <TabsContent value="payments" className="mt-4">
           <Card className="glass-card p-6">
             {payments.map((p) => (
