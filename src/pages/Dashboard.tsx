@@ -5,7 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Wallet, ShoppingCart, CheckCircle2, Plus, Search, ExternalLink, TrendingUp } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Wallet, ShoppingCart, CheckCircle2, Plus, Search, ExternalLink, TrendingUp, Package } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import { Link } from "react-router-dom";
@@ -21,35 +22,46 @@ interface Purchase {
   created_at: string;
 }
 
+interface ProductPurchase {
+  id: string;
+  product_name: string;
+  quantity: number;
+  total_eur: number;
+  status: string;
+  created_at: string;
+}
+
 const Dashboard = () => {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const [balance, setBalance] = useState(0);
   const [totalSpent, setTotalSpent] = useState(0);
   const [totalCredited, setTotalCredited] = useState(0);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [productPurchases, setProductPurchases] = useState<ProductPurchase[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!profile) return;
+    let cancelled = false;
     (async () => {
-      const { data: wallet } = await supabase
-        .from("wallets")
-        .select("balance, total_spent, total_credited")
-        .eq("user_id", profile.id)
-        .maybeSingle();
-      if (wallet) {
-        setBalance(Number(wallet.balance ?? 0));
-        setTotalSpent(Number(wallet.total_spent ?? 0));
-        setTotalCredited(Number(wallet.total_credited ?? 0));
+      setLoadingData(true);
+      const [walletRes, purchaseRes, prodRes] = await Promise.all([
+        supabase.from("wallets").select("balance, total_spent, total_credited").eq("user_id", profile.id).maybeSingle(),
+        supabase.from("purchases").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }).limit(20),
+        supabase.from("product_purchases").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }).limit(20),
+      ]);
+      if (cancelled) return;
+      if (walletRes.data) {
+        setBalance(Number(walletRes.data.balance ?? 0));
+        setTotalSpent(Number(walletRes.data.total_spent ?? 0));
+        setTotalCredited(Number(walletRes.data.total_credited ?? 0));
       }
-      const { data: p } = await supabase
-        .from("purchases")
-        .select("*")
-        .eq("user_id", profile.id)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      setPurchases((p ?? []) as Purchase[]);
+      setPurchases((purchaseRes.data ?? []) as Purchase[]);
+      setProductPurchases((prodRes.data ?? []) as ProductPurchase[]);
+      setLoadingData(false);
     })();
+    return () => { cancelled = true; };
   }, [profile]);
 
   const filtered = purchases.filter((p) =>
@@ -64,42 +76,55 @@ const Dashboard = () => {
     return "Good evening";
   })();
 
+  const isLoading = authLoading || !profile || loadingData;
+
   return (
     <DashboardLayout>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
             👋 {greeting}{" "}
-            <span className="text-gradient-primary">{profile?.display_name ?? "Runner"}</span>
+            {profile?.display_name ? (
+              <span className="text-gradient-primary">{profile.display_name}</span>
+            ) : (
+              <Skeleton className="inline-block h-7 w-32 align-middle" />
+            )}
           </h1>
           <p className="mt-1 text-muted-foreground">Voici un aperçu de ton activité SlowRun.</p>
         </div>
-        <Link to="/credit">
-          <Button size="lg" className="gap-2 shadow-[var(--shadow-glow)]">
-            <Plus className="h-5 w-5" /> Créditer mon solde
-          </Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/products">
+            <Button size="lg" variant="outline" className="gap-2">
+              <Package className="h-5 w-5" /> Acheter un produit
+            </Button>
+          </Link>
+          <Link to="/credit">
+            <Button size="lg" className="gap-2 shadow-[var(--shadow-glow)]">
+              <Plus className="h-5 w-5" /> Créditer mon solde
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-5 md:grid-cols-3">
         <StatCard
           title="Solde actuel"
-          value={`${balance.toFixed(2)} q`}
-          description={`Équivalent ${balance.toFixed(2)} €`}
+          value={isLoading ? "…" : `${balance.toFixed(2)} €`}
+          description={isLoading ? "Chargement…" : "Disponible pour achats"}
           icon={Wallet}
           variant="primary"
         />
         <StatCard
           title="Total achats"
-          value={purchases.length.toString()}
-          description="Nombre total de paniers achetés."
+          value={isLoading ? "…" : (purchases.length + productPurchases.length).toString()}
+          description="Paniers + produits achetés."
           icon={ShoppingCart}
           variant="accent"
         />
         <StatCard
           title="Total dépensé"
-          value={`${totalSpent.toFixed(2)} €`}
-          description={`Total crédité : ${totalCredited.toFixed(2)} €`}
+          value={isLoading ? "…" : `${totalSpent.toFixed(2)} €`}
+          description={isLoading ? "Chargement…" : `Total crédité : ${totalCredited.toFixed(2)} €`}
           icon={TrendingUp}
           variant="neutral"
         />
@@ -127,12 +152,18 @@ const Dashboard = () => {
           </div>
 
           <div className="mt-6 space-y-3">
-            {filtered.length === 0 && (
+            {isLoading && (
+              <>
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
+              </>
+            )}
+            {!isLoading && filtered.length === 0 && (
               <div className="rounded-xl border border-dashed border-border/60 p-10 text-center text-sm text-muted-foreground">
                 Aucun achat pour le moment. Le bot Discord enregistrera ici tes paniers dès que tu en achètes.
               </div>
             )}
-            {filtered.map((p) => (
+            {!isLoading && filtered.map((p) => (
               <div key={p.id} className="rounded-xl border border-border/60 bg-secondary/20 p-4 transition-colors hover:bg-secondary/40">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -170,17 +201,30 @@ const Dashboard = () => {
         </Card>
 
         <Card className="glass-card p-6">
-          <h2 className="text-xl font-semibold">Bot Discord</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Utilise les commandes slash pour gérer tes quotas depuis Discord.
-          </p>
-          <div className="mt-4 space-y-2 text-sm">
-            <div className="rounded-lg bg-secondary/40 p-3 font-mono">/solde</div>
-            <div className="rounded-lg bg-secondary/40 p-3 font-mono">/historique</div>
-            <div className="rounded-lg bg-secondary/40 p-3 font-mono">/acheter event store prix</div>
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <Package className="h-5 w-5 text-accent" />
+            Mes produits
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">Produits achetés avec ton solde.</p>
+          <div className="mt-4 space-y-2">
+            {isLoading && <Skeleton className="h-16 w-full" />}
+            {!isLoading && productPurchases.length === 0 && (
+              <div className="rounded-lg border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
+                Aucun produit acheté.
+              </div>
+            )}
+            {!isLoading && productPurchases.slice(0, 5).map((pp) => (
+              <div key={pp.id} className="rounded-lg bg-secondary/40 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-sm font-medium">{pp.product_name}</span>
+                  <span className="text-sm font-semibold">{Number(pp.total_eur).toFixed(2)} €</span>
+                </div>
+                <div className="text-xs text-muted-foreground">Qté {pp.quantity} • {new Date(pp.created_at).toLocaleString("fr-FR")}</div>
+              </div>
+            ))}
           </div>
-          <Link to="/api-keys">
-            <Button variant="outline" className="mt-4 w-full">Gérer mes API keys</Button>
+          <Link to="/products">
+            <Button variant="outline" className="mt-4 w-full">Voir le catalogue</Button>
           </Link>
         </Card>
       </div>
