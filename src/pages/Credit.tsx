@@ -24,12 +24,32 @@ const Credit = () => {
     }
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("stripe-checkout", {
-        body: { amount },
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        toast.error("Ta session a expiré, reconnecte-toi.");
+        return;
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL ?? "https://jisiahjqkxuctzmrsqzd.supabase.co"}/functions/v1/stripe-checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "sb_publishable_0dgR1Ed5bYz8mx6cGapjqw_le7V33t2",
+        },
+        body: JSON.stringify({ amount }),
       });
-      if (error) throw error;
-      if (data?.url) {
-        window.location.href = data.url;
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload?.error ?? `Erreur ${response.status}`);
+      }
+
+      if (payload?.url) {
+        window.location.href = payload.url;
       } else {
         toast.error("Impossible de créer la session de paiement.");
       }
