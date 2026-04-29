@@ -4,4 +4,4 @@ project_id = "jisiahjqkxuctzmrsqzd"
 verify_jwt = false
 
 [functions.create-api-key]
-verify_jwt = false
+verify_jwt = true
