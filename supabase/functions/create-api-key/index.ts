@@ -1,7 +1,10 @@
-// redeploy: create-api-key v2
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// redeploy: create-api-key v3
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { corsHeaders } from "jsr:@supabase/supabase-js@2/cors";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
 
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
