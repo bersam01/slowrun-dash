@@ -1,0 +1,7 @@
+project_id = "jisiahjqkxuctzmrsqzd"
+
+[functions.bot-api]
+verify_jwt = false
+
+[functions.create-api-key]
+verify_jwt = false
