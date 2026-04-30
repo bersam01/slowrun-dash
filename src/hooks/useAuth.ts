@@ -107,8 +107,19 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshPr
   const loadProfile = useCallback(async (user: User | null) => {
     if (!user) return null;
 
-    const identities = await getUserDiscordIdentities(user);
-    const nextProfilePayload = buildProfilePayload(user, identities);
+    let authUser = user;
+
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (!error && data.user?.id === user.id) {
+        authUser = data.user;
+      }
+    } catch (error) {
+      console.error("Unable to refresh authenticated user", error);
+    }
+
+    const identities = await getUserDiscordIdentities(authUser);
+    const nextProfilePayload = buildProfilePayload(authUser, identities);
 
     const { data, error } = await supabase
       .from("profiles")
