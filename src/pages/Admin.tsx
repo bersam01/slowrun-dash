@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2 } from "lucide-react";
+import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2, Calculator } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -58,6 +58,25 @@ interface ProductRow {
   image_url: string | null;
   active: boolean;
   stock: number | null;
+}
+
+interface WalletRow {
+  user_id: string;
+  balance: number;
+  total_credited: number;
+  total_spent: number;
+}
+
+interface RefundRow {
+  id: string;
+  user_id: string | null;
+  user_name: string | null;
+  amount_eur: number;
+  fee_pct: number;
+  fee_eur: number;
+  refund_eur: number;
+  note: string | null;
+  created_at: string;
 }
 
 const Admin = () => {
