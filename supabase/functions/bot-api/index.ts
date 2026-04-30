@@ -1,7 +1,7 @@
-// redeploy: bot-api v10 - force re-deploy, the live version is stale
+// redeploy: bot-api v11 - force re-deploy, the live version is stale
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
-const API_VERSION = "bot-api-v10";
+const API_VERSION = "bot-api-v11";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
