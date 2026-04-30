@@ -1,4 +1,4 @@
-// redeploy: bot-api v4 - force redeploy
+// redeploy: bot-api v5 - force redeploy with fallback keys
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const corsHeaders = {
