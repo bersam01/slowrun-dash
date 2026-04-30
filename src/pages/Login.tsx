@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/hooks/useAuth";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { goToDashboard } from "@/lib/dashboardUrl";
+import { goToDashboard, isOnSiteHost } from "@/lib/dashboardUrl";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
