@@ -35,20 +35,22 @@ const buildProfilePayload = (user: User) => {
   const metadata = user.user_metadata ?? {};
   const identities = ((user as User & { identities?: DiscordIdentity[] }).identities ?? []);
   const discordIdentity = identities.find((identity) => identity.provider === "discord");
+  const discordIdentityRecord = (discordIdentity ?? {}) as Record<string, unknown>;
+  const discordIdentityData = (discordIdentityRecord.identity_data ?? {}) as Record<string, unknown>;
   const discordIdFromIdentity = digitsOnly(
-    discordIdentity?.provider_id ??
-    discordIdentity?.id ??
-    discordIdentity?.identity_data?.provider_id ??
-    discordIdentity?.identity_data?.sub ??
-    discordIdentity?.identity_data?.id,
+    discordIdentityRecord.provider_id ??
+    discordIdentityRecord.id ??
+    discordIdentityData.provider_id ??
+    discordIdentityData.sub ??
+    discordIdentityData.id,
   );
   const discordIdFromMetadata = digitsOnly(
     metadata.provider_id ?? metadata.sub ?? metadata.preferred_username ?? null,
   );
   const discordDisplayName =
-    (typeof discordIdentity?.identity_data?.global_name === "string" && discordIdentity.identity_data.global_name) ||
-    (typeof discordIdentity?.identity_data?.full_name === "string" && discordIdentity.identity_data.full_name) ||
-    (typeof discordIdentity?.identity_data?.name === "string" && discordIdentity.identity_data.name) ||
+    (typeof discordIdentityData.global_name === "string" && discordIdentityData.global_name) ||
+    (typeof discordIdentityData.full_name === "string" && discordIdentityData.full_name) ||
+    (typeof discordIdentityData.name === "string" && discordIdentityData.name) ||
     null;
 
   return {
