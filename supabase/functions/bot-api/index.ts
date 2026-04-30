@@ -230,8 +230,18 @@ Deno.serve(async (req) => {
       const store = String(body?.store ?? "").trim();
       const product_url = body?.product_url ? String(body.product_url) : null;
       const quantity = Math.max(1, Number(body?.quantity ?? 1));
+      // amount = ce qui est débité du solde (= commission par défaut)
       const amount = Number(body?.amount);
       const status = String(body?.status ?? "success");
+      const category = body?.category ? String(body.category) : null;
+      const site = body?.site ? String(body.site) : null;
+      const event_date = body?.event_date ? String(body.event_date) : null;
+      const retail_price = Number.isFinite(Number(body?.retail_price)) ? Number(body.retail_price) : null;
+      const commission = Number.isFinite(Number(body?.commission)) ? Number(body.commission) : null;
+      const seatsRaw = body?.seats;
+      const seats: string[] | null = Array.isArray(seatsRaw)
+        ? seatsRaw.map((s) => String(s))
+        : (typeof seatsRaw === "string" && seatsRaw.trim() ? [seatsRaw] : null);
 
       if (!event_name || !store || !Number.isFinite(amount) || amount <= 0) {
         return json({ error: "event_name, store et amount (>0) requis" }, 400);
@@ -256,6 +266,12 @@ Deno.serve(async (req) => {
         quantity,
         price_quota: amount,
         status,
+        category,
+        seats,
+        retail_price,
+        commission,
+        site,
+        event_date,
       });
       if (insErr) return json({ error: insErr.message }, 500);
 
