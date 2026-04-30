@@ -19,6 +19,14 @@ const Login = () => {
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
 
+  // Si on est sur slowrun.org/login, on bascule sur dashboard.slowrun.org/login
+  // pour que la session Supabase soit posée sur le bon domaine.
+  useEffect(() => {
+    if (typeof window !== "undefined" && isOnSiteHost()) {
+      window.location.replace("https://dashboard.slowrun.org/login");
+    }
+  }, []);
+
   useEffect(() => {
     if (loading) return;
     if (user && profile?.status === "approved") goToDashboard(navigate);
@@ -32,12 +40,7 @@ const Login = () => {
     }
 
     try {
-      const isSiteHost =
-        window.location.hostname === "slowrun.org" ||
-        window.location.hostname === "www.slowrun.org";
-      const redirectTo = isSiteHost
-        ? "https://dashboard.slowrun.org/"
-        : `${window.location.origin}/`;
+      const redirectTo = "https://dashboard.slowrun.org/";
       const params = new URLSearchParams({
         provider: "discord",
         redirect_to: redirectTo,
