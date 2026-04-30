@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/hooks/useAuth";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { goToDashboard } from "@/lib/dashboardUrl";
+import { getDashboardUrl, goToDashboard, isOnDashboardHost } from "@/lib/dashboardUrl";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -32,7 +32,11 @@ const Login = () => {
     }
 
     try {
-      const redirectTo = `${window.location.origin}/dashboard`;
+      // En prod on envoie l'utilisateur directement sur le sous-domaine dashboard
+      // pour que la session Supabase soit créée sur le bon hostname.
+      const redirectTo = isOnDashboardHost()
+        ? `${window.location.origin}/dashboard`
+        : getDashboardUrl("/dashboard");
       const params = new URLSearchParams({
         provider: "discord",
         redirect_to: redirectTo,
