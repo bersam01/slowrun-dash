@@ -272,7 +272,8 @@ const Admin = () => {
                   </Button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </Card>
         </TabsContent>
 
