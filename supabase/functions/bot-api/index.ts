@@ -28,29 +28,33 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    // Auth via X-API-Key (sk_...)
+    // Auth: accept either the bot master key (SLOWRUN_BOT_API_KEY) or per-user sk_ key
     const apiKey = req.headers.get("x-api-key") ?? req.headers.get("X-API-Key");
-    if (!apiKey || !apiKey.startsWith("sk_")) {
-      return json({ error: "Missing or invalid API key" }, 401);
-    }
+    if (!apiKey) return json({ error: "Missing API key" }, 401);
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const BOT_MASTER_KEY = Deno.env.get("SLOWRUN_BOT_API_KEY") ?? "";
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-    const key_hash = await sha256Hex(apiKey);
-    const { data: keyRow, error: keyErr } = await admin
-      .from("api_keys")
-      .select("id, user_id")
-      .eq("key_hash", key_hash)
-      .maybeSingle();
+    let ownerUserId = "";
 
-    if (keyErr || !keyRow) return json({ error: "Invalid API key" }, 401);
-
-    // Touch last_used_at (fire-and-forget)
-    admin.from("api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", keyRow.id).then();
-
-    const ownerUserId = keyRow.user_id as string;
+    if (BOT_MASTER_KEY && apiKey === BOT_MASTER_KEY) {
+      // Master bot key: full admin, no specific owner user
+      ownerUserId = "";
+    } else if (apiKey.startsWith("sk_")) {
+      const key_hash = await sha256Hex(apiKey);
+      const { data: keyRow, error: keyErr } = await admin
+        .from("api_keys")
+        .select("id, user_id")
+        .eq("key_hash", key_hash)
+        .maybeSingle();
+      if (keyErr || !keyRow) return json({ error: "Invalid API key" }, 401);
+      admin.from("api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", keyRow.id).then();
+      ownerUserId = keyRow.user_id as string;
+    } else {
+      return json({ error: "Invalid API key" }, 401);
+    }
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "");

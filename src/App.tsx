@@ -12,6 +12,7 @@ import Credit from "./pages/Credit.tsx";
 import Products from "./pages/Products.tsx";
 import Admin from "./pages/Admin.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
+import { AuthProvider } from "./hooks/useAuth";
 
 const queryClient = new QueryClient();
 
@@ -21,6 +22,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <AuthProvider>
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
@@ -31,6 +33,7 @@ const App = () => (
           <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

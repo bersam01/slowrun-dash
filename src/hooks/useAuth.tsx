@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
@@ -24,13 +24,17 @@ interface AuthState {
   isAdmin: boolean;
 }
 
+type AuthContextValue = AuthState & {
+  signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+};
+
 type DiscordIdentity = Record<string, unknown> & {
   provider?: string;
   identity_data?: Record<string, unknown>;
 };
 
 const normalizeIdentity = (identity: unknown): DiscordIdentity => identity as DiscordIdentity;
-
 const digitsOnly = (value: unknown) => String(value ?? "").replace(/\D/g, "");
 
 const buildProfilePayload = (user: User, identities: DiscordIdentity[] = []) => {
@@ -40,10 +44,10 @@ const buildProfilePayload = (user: User, identities: DiscordIdentity[] = []) => 
   const discordIdentityData = (discordIdentityRecord.identity_data ?? {}) as Record<string, unknown>;
   const discordIdFromIdentity = digitsOnly(
     discordIdentityRecord.provider_id ??
-    discordIdentityRecord.id ??
-    discordIdentityData.provider_id ??
-    discordIdentityData.sub ??
-    discordIdentityData.id,
+      discordIdentityRecord.id ??
+      discordIdentityData.provider_id ??
+      discordIdentityData.sub ??
+      discordIdentityData.id,
   );
   const discordIdFromMetadata = digitsOnly(
     metadata.provider_id ?? metadata.sub ?? metadata.preferred_username ?? null,
@@ -72,22 +76,19 @@ const buildProfilePayload = (user: User, identities: DiscordIdentity[] = []) => 
 };
 
 const getUserDiscordIdentities = async (user: User): Promise<DiscordIdentity[]> => {
-  const embeddedIdentities = (((user as User & { identities?: unknown[] }).identities ?? []).map(normalizeIdentity));
+  const embeddedIdentities = ((user as User & { identities?: unknown[] }).identities ?? []).map(normalizeIdentity);
   if (embeddedIdentities.length > 0) return embeddedIdentities;
 
   try {
     const authApi = supabase.auth as typeof supabase.auth & {
       getUserIdentities?: () => Promise<{ data?: { identities?: DiscordIdentity[] }; error?: { message?: string } | null }>;
     };
-
     if (!authApi.getUserIdentities) return [];
-
     const { data, error } = await authApi.getUserIdentities();
     if (error) {
       console.error("Unable to read linked auth identities", error);
       return [];
     }
-
     return (data?.identities ?? []).map(normalizeIdentity);
   } catch (error) {
     console.error("Unable to read linked auth identities", error);
@@ -95,7 +96,9 @@ const getUserDiscordIdentities = async (user: User): Promise<DiscordIdentity[]> 
   }
 };
 
-export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshProfile: () => Promise<void> } => {
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [state, setState] = useState<AuthState>({
     loading: true,
     session: null,
@@ -108,12 +111,9 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshPr
     if (!user) return null;
 
     let authUser = user;
-
     try {
       const { data, error } = await supabase.auth.getUser();
-      if (!error && data.user?.id === user.id) {
-        authUser = data.user;
-      }
+      if (!error && data.user?.id === user.id) authUser = data.user;
     } catch (error) {
       console.error("Unable to refresh authenticated user", error);
     }
@@ -151,22 +151,16 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshPr
         console.error("Unable to sync profile", updateError);
         return profile;
       }
-
       return (updatedProfile as Profile | null) ?? profile;
     }
 
     if (error) {
       console.error("Unable to read profile", error);
       const code = String(error.code ?? "");
-      if (!NO_PROFILE_FOUND_CODES.has(code)) {
-        return null;
-      }
+      if (!NO_PROFILE_FOUND_CODES.has(code)) return null;
     }
 
-    const { error: insertError } = await supabase
-      .from("profiles")
-      .insert(nextProfilePayload);
-
+    const { error: insertError } = await supabase.from("profiles").insert(nextProfilePayload);
     if (insertError) {
       console.error("Unable to create missing profile", insertError);
       return null;
@@ -181,16 +175,13 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshPr
     if (createdProfileError) {
       console.error("Unable to reload created profile", createdProfileError);
     }
-
     return (createdProfile as Profile | null) ?? null;
   }, []);
 
   const refreshProfile = useCallback(async () => {
     if (!isSupabaseConfigured) return;
-
     const { data: { session } } = await supabase.auth.getSession();
     const profile = await loadProfile(session?.user ?? null);
-
     setState({
       loading: false,
       session,
@@ -208,7 +199,6 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshPr
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       setState((s) => ({ ...s, session, user: session?.user ?? null }));
-      // Defer profile fetch to avoid deadlock
       setTimeout(async () => {
         const profile = await loadProfile(session?.user ?? null);
         setState({
@@ -239,5 +229,17 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshPr
     await supabase.auth.signOut();
   };
 
-  return { ...state, signOut, refreshProfile };
+  return (
+    <AuthContext.Provider value={{ ...state, signOut, refreshProfile }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = (): AuthContextValue => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return ctx;
 };
