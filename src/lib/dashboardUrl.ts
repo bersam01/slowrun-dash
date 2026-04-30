@@ -1,16 +1,51 @@
-// Une seule app déployée sur le primary domain (slowrun.org).
-// Tout le flux (login, dashboard) se passe sur le même domaine pour éviter
-// les pertes de session et les boucles de redirection liées aux sous-domaines.
+// Le site marketing/login vit sur slowrun.org.
+// Une fois connecté, l'utilisateur est envoyé sur dashboard.slowrun.org.
+// En dev/preview (lovable.app, localhost…), tout reste sur le même origin.
 
-export const isOnDashboardHost = () => false;
-export const isOnSiteHost = () => false;
-export const shouldUseDashboardDomain = () => false;
+const DASHBOARD_HOST = "dashboard.slowrun.org";
+const SITE_HOST = "slowrun.org";
 
-export const getDashboardUrl = (path: string = "/dashboard") => path;
+const getHost = () =>
+  typeof window !== "undefined" ? window.location.hostname : "";
+
+export const isOnDashboardHost = () => getHost() === DASHBOARD_HOST;
+export const isOnSiteHost = () =>
+  getHost() === SITE_HOST || getHost() === `www.${SITE_HOST}`;
+
+const usesProdDomains = () => isOnDashboardHost() || isOnSiteHost();
+
+export const getDashboardUrl = (path: string = "/dashboard") => {
+  if (usesProdDomains()) {
+    return `https://${DASHBOARD_HOST}${path === "/dashboard" ? "/" : path}`;
+  }
+  return path;
+};
+
+export const getSiteUrl = (path: string = "/login") => {
+  if (usesProdDomains()) {
+    return `https://${SITE_HOST}${path}`;
+  }
+  return path;
+};
 
 export const goToDashboard = (
   navigate: (path: string) => void,
   path: string = "/dashboard",
 ) => {
+  if (usesProdDomains()) {
+    window.location.href = getDashboardUrl(path);
+    return;
+  }
+  navigate(path);
+};
+
+export const goToSite = (
+  navigate: (path: string) => void,
+  path: string = "/login",
+) => {
+  if (usesProdDomains()) {
+    window.location.href = getSiteUrl(path);
+    return;
+  }
   navigate(path);
 };
