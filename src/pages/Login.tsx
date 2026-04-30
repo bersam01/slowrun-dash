@@ -36,8 +36,8 @@ const Login = () => {
         window.location.hostname === "slowrun.org" ||
         window.location.hostname === "www.slowrun.org";
       const redirectTo = isSiteHost
-        ? "https://dashboard.slowrun.org/dashboard"
-        : `${window.location.origin}/dashboard`;
+        ? "https://dashboard.slowrun.org/"
+        : `${window.location.origin}/`;
       const params = new URLSearchParams({
         provider: "discord",
         redirect_to: redirectTo,
