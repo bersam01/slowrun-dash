@@ -206,13 +206,14 @@ const Admin = () => {
       </div>
 
       <Tabs defaultValue="approvals" className="mt-8">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-6">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-7">
           <TabsTrigger value="approvals">Approbations ({pending.length})</TabsTrigger>
           <TabsTrigger value="users"><Users className="mr-1 h-4 w-4" />Utilisateurs</TabsTrigger>
           <TabsTrigger value="credits"><Wallet className="mr-1 h-4 w-4" />Crédits</TabsTrigger>
           <TabsTrigger value="products"><Package className="mr-1 h-4 w-4" />Produits</TabsTrigger>
           <TabsTrigger value="payments">Paiements</TabsTrigger>
           <TabsTrigger value="purchases"><ShoppingCart className="mr-1 h-4 w-4" />Achats</TabsTrigger>
+          <TabsTrigger value="accounting"><Calculator className="mr-1 h-4 w-4" />Comptabilité</TabsTrigger>
         </TabsList>
 
         <TabsContent value="approvals" className="mt-4">
@@ -239,17 +240,23 @@ const Admin = () => {
 
         <TabsContent value="users" className="mt-4">
           <Card className="glass-card p-6">
-            {users.map((u) => (
+            {users.filter((u) => u.status !== "rejected").map((u) => {
+              const w = wallets[u.id];
+              return (
               <div key={u.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 py-3 last:border-0">
                 <div className="flex items-center gap-3">
                   {u.avatar_url && <img src={u.avatar_url} className="h-10 w-10 rounded-full" alt="" />}
                   <div>
                     <div className="font-medium">{u.display_name ?? "—"} {u.is_admin && <Badge className="ml-1 bg-accent text-accent-foreground">Admin</Badge>}</div>
                     <div className="text-xs text-muted-foreground">Discord: {u.discord_id ?? "—"}</div>
+                    <div className="mt-1 text-xs">
+                      <span className="font-semibold text-primary">Solde : {Number(w?.balance ?? 0).toFixed(2)} q</span>
+                      <span className="ml-2 text-muted-foreground">(crédité {Number(w?.total_credited ?? 0).toFixed(2)} • dépensé {Number(w?.total_spent ?? 0).toFixed(2)})</span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={u.status === "approved" ? "default" : u.status === "pending" ? "secondary" : "destructive"}>{u.status}</Badge>
+                  <Badge variant={u.status === "approved" ? "default" : "secondary"}>{u.status}</Badge>
                   <Input
                     type="number"
                     placeholder="€"
