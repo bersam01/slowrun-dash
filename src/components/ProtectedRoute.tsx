@@ -1,7 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
-import { shouldUseDashboardDomain, getDashboardUrl } from "@/lib/dashboardUrl";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -10,11 +9,6 @@ interface ProtectedRouteProps {
 
 export const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps) => {
   const { loading, user, profile, isAdmin } = useAuth();
-
-  if (typeof window !== "undefined" && shouldUseDashboardDomain()) {
-    window.location.replace(getDashboardUrl(window.location.pathname || "/dashboard"));
-    return null;
-  }
 
   if (loading) {
     return (
