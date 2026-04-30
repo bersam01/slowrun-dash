@@ -15,6 +15,8 @@ async function sha256Hex(input: string): Promise<string> {
     .join("");
 }
 
+const normalizeDiscordId = (value: unknown) => String(value ?? "").replace(/\D/g, "");
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -52,7 +54,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "");
-    const discord_id = body?.discord_id ? String(body.discord_id).trim() : null;
+    const discord_id = body?.discord_id ? normalizeDiscordId(body.discord_id) : null;
 
     // Resolve target user from discord_id (admin-key model: bot acts on behalf of any linked user)
     async function resolveUserId(): Promise<string | null> {
@@ -82,8 +84,70 @@ Deno.serve(async (req) => {
       return approvedProfile?.id ?? data[0]?.id ?? null;
     }
 
+    async function resolveUserIdFromAuthIdentity(): Promise<string | null> {
+      if (!discord_id) return null;
+
+      let page = 1;
+      const perPage = 200;
+
+      while (page <= 10) {
+        const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+
+        if (error) {
+          console.error("resolveUserIdFromAuthIdentity failed", { discord_id, error });
+          return null;
+        }
+
+        const users = data?.users ?? [];
+        if (!users.length) break;
+
+        const matchedUser = users.find((user) =>
+          (user.identities ?? []).some((identity) => {
+            if (identity.provider !== "discord") return false;
+            const identityData = (identity.identity_data ?? {}) as Record<string, unknown>;
+            const candidate = normalizeDiscordId(
+              identity.provider_id ?? identityData.provider_id ?? identityData.sub ?? identityData.id,
+            );
+            return candidate === discord_id;
+          }),
+        );
+
+        if (matchedUser) {
+          const metadata = (matchedUser.user_metadata ?? {}) as Record<string, unknown>;
+          const display_name =
+            String(metadata.full_name ?? metadata.global_name ?? metadata.name ?? metadata.user_name ?? matchedUser.email ?? "").trim() || null;
+          const avatar_url =
+            String(metadata.avatar_url ?? metadata.picture ?? "").trim() || null;
+
+          const { data: existingProfile } = await admin
+            .from("profiles")
+            .select("id")
+            .eq("id", matchedUser.id)
+            .maybeSingle();
+
+          if (existingProfile) {
+            const { error: syncError } = await admin
+              .from("profiles")
+              .update({ discord_id, display_name, avatar_url })
+              .eq("id", matchedUser.id);
+
+            if (syncError) {
+              console.error("Unable to sync discord_id from auth identity", { discord_id, user_id: matchedUser.id, syncError });
+            }
+          }
+
+          return matchedUser.id;
+        }
+
+        if (users.length < perPage) break;
+        page += 1;
+      }
+
+      return null;
+    }
+
     if (action === "balance") {
-      const userId = await resolveUserId();
+      const userId = (await resolveUserId()) ?? (await resolveUserIdFromAuthIdentity());
       if (!userId) return json({ error: "Compte non trouvé. Connecte-toi sur le site avec Discord d'abord." }, 404);
 
       const { data: profile } = await admin
@@ -107,7 +171,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "history") {
-      const userId = await resolveUserId();
+      const userId = (await resolveUserId()) ?? (await resolveUserIdFromAuthIdentity());
       if (!userId) return json({ error: "Compte non trouvé." }, 404);
       const limit = Math.min(Math.max(Number(body?.limit ?? 5), 1), 20);
       const { data } = await admin
@@ -120,7 +184,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "purchase") {
-      const userId = await resolveUserId();
+      const userId = (await resolveUserId()) ?? (await resolveUserIdFromAuthIdentity());
       if (!userId) return json({ error: "Compte non trouvé." }, 404);
 
       const event_name = String(body?.event_name ?? "").trim();
