@@ -24,17 +24,40 @@ interface AuthState {
   isAdmin: boolean;
 }
 
+type DiscordIdentity = Record<string, unknown> & {
+  provider?: string;
+  identity_data?: Record<string, unknown>;
+};
+
+const digitsOnly = (value: unknown) => String(value ?? "").replace(/\D/g, "");
+
 const buildProfilePayload = (user: User) => {
   const metadata = user.user_metadata ?? {};
+  const identities = ((user as User & { identities?: DiscordIdentity[] }).identities ?? []);
+  const discordIdentity = identities.find((identity) => identity.provider === "discord");
+  const discordIdentityRecord = (discordIdentity ?? {}) as Record<string, unknown>;
+  const discordIdentityData = (discordIdentityRecord.identity_data ?? {}) as Record<string, unknown>;
+  const discordIdFromIdentity = digitsOnly(
+    discordIdentityRecord.provider_id ??
+    discordIdentityRecord.id ??
+    discordIdentityData.provider_id ??
+    discordIdentityData.sub ??
+    discordIdentityData.id,
+  );
+  const discordIdFromMetadata = digitsOnly(
+    metadata.provider_id ?? metadata.sub ?? metadata.preferred_username ?? null,
+  );
+  const discordDisplayName =
+    (typeof discordIdentityData.global_name === "string" && discordIdentityData.global_name) ||
+    (typeof discordIdentityData.full_name === "string" && discordIdentityData.full_name) ||
+    (typeof discordIdentityData.name === "string" && discordIdentityData.name) ||
+    null;
 
   return {
     id: user.id,
-    discord_id:
-      metadata.provider_id ??
-      metadata.sub ??
-      metadata.preferred_username ??
-      null,
+    discord_id: discordIdFromIdentity || discordIdFromMetadata || null,
     display_name:
+      discordDisplayName ??
       metadata.full_name ??
       metadata.global_name ??
       metadata.name ??
@@ -59,13 +82,41 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshPr
   const loadProfile = useCallback(async (user: User | null) => {
     if (!user) return null;
 
+    const nextProfilePayload = buildProfilePayload(user);
+
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (data) return data as Profile;
+    if (data) {
+      const profile = data as Profile;
+      const needsSync =
+        (nextProfilePayload.discord_id && nextProfilePayload.discord_id !== profile.discord_id) ||
+        (nextProfilePayload.display_name && nextProfilePayload.display_name !== profile.display_name) ||
+        (nextProfilePayload.avatar_url && nextProfilePayload.avatar_url !== profile.avatar_url);
+
+      if (!needsSync) return profile;
+
+      const { data: updatedProfile, error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          discord_id: nextProfilePayload.discord_id,
+          display_name: nextProfilePayload.display_name,
+          avatar_url: nextProfilePayload.avatar_url,
+        })
+        .eq("id", user.id)
+        .select("*")
+        .maybeSingle();
+
+      if (updateError) {
+        console.error("Unable to sync profile", updateError);
+        return profile;
+      }
+
+      return (updatedProfile as Profile | null) ?? profile;
+    }
 
     if (error) {
       console.error("Unable to read profile", error);
@@ -77,7 +128,7 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshPr
 
     const { error: insertError } = await supabase
       .from("profiles")
-      .insert(buildProfilePayload(user));
+      .insert(nextProfilePayload);
 
     if (insertError) {
       console.error("Unable to create missing profile", insertError);
