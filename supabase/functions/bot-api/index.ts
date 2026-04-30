@@ -42,13 +42,17 @@ Deno.serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    // Hardcoded fallback master key (simple mode for personal bot).
-    // Use this exact value in your bot's .env as SLOWRUN_API_KEY.
-    const HARDCODED_MASTER_KEY = "slowrun_bot_master_2026_x9f7K2pQwL8mN3vR";
+    // Hardcoded fallback master keys for local bot setups.
+    // Prefer the secret SLOWRUN_BOT_API_KEY, but keep these values accepted
+    // so the desktop bot keeps working even if the runtime secret is different.
+    const FALLBACK_MASTER_KEYS = [
+      "slowrun_bot_test_2026",
+      "slowrun_bot_master_2026_x9f7K2pQwL8mN3vR",
+    ];
     const configuredMasterKeys = [
       Deno.env.get("SLOWRUN_BOT_API_KEY"),
       Deno.env.get("SLOWRUN_API_KEY"),
-      HARDCODED_MASTER_KEY,
+      ...FALLBACK_MASTER_KEYS,
     ]
       .map((value) => sanitizeApiKey(value))
       .filter(Boolean);
@@ -56,7 +60,7 @@ Deno.serve(async (req) => {
       received_key_prefix: apiKey.slice(0, 8),
       received_key_length: apiKey.length,
       configured_count: configuredMasterKeys.length,
-      matches_hardcoded: apiKey === HARDCODED_MASTER_KEY,
+      matches_fallback: FALLBACK_MASTER_KEYS.includes(apiKey),
     });
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
