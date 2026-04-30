@@ -31,9 +31,8 @@ type DiscordIdentity = Record<string, unknown> & {
 
 const digitsOnly = (value: unknown) => String(value ?? "").replace(/\D/g, "");
 
-const buildProfilePayload = (user: User) => {
+const buildProfilePayload = (user: User, identities: DiscordIdentity[] = []) => {
   const metadata = user.user_metadata ?? {};
-  const identities = ((user as User & { identities?: DiscordIdentity[] }).identities ?? []);
   const discordIdentity = identities.find((identity) => identity.provider === "discord");
   const discordIdentityRecord = (discordIdentity ?? {}) as Record<string, unknown>;
   const discordIdentityData = (discordIdentityRecord.identity_data ?? {}) as Record<string, unknown>;
@@ -70,6 +69,30 @@ const buildProfilePayload = (user: User) => {
   };
 };
 
+const getUserDiscordIdentities = async (user: User): Promise<DiscordIdentity[]> => {
+  const embeddedIdentities = ((user as User & { identities?: DiscordIdentity[] }).identities ?? []);
+  if (embeddedIdentities.length > 0) return embeddedIdentities;
+
+  try {
+    const authApi = supabase.auth as typeof supabase.auth & {
+      getUserIdentities?: () => Promise<{ data?: { identities?: DiscordIdentity[] }; error?: { message?: string } | null }>;
+    };
+
+    if (!authApi.getUserIdentities) return [];
+
+    const { data, error } = await authApi.getUserIdentities();
+    if (error) {
+      console.error("Unable to read linked auth identities", error);
+      return [];
+    }
+
+    return data?.identities ?? [];
+  } catch (error) {
+    console.error("Unable to read linked auth identities", error);
+    return [];
+  }
+};
+
 export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshProfile: () => Promise<void> } => {
   const [state, setState] = useState<AuthState>({
     loading: true,
@@ -82,7 +105,8 @@ export const useAuth = (): AuthState & { signOut: () => Promise<void>; refreshPr
   const loadProfile = useCallback(async (user: User | null) => {
     if (!user) return null;
 
-    const nextProfilePayload = buildProfilePayload(user);
+    const identities = await getUserDiscordIdentities(user);
+    const nextProfilePayload = buildProfilePayload(user, identities);
 
     const { data, error } = await supabase
       .from("profiles")
