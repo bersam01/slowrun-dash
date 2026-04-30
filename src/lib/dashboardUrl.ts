@@ -2,8 +2,8 @@
 // Une fois connecté, l'utilisateur est envoyé sur dashboard.slowrun.org.
 // En dev/preview (lovable.app, localhost…), tout reste sur le même origin.
 
-const DASHBOARD_HOST = "dashboard.slowrun.org";
-const SITE_HOST = "slowrun.org";
+const DASHBOARD_HOST = "dashboard.slowrun.app";
+const SITE_HOST = "slowrun.app";
 
 const getHost = () =>
   typeof window !== "undefined" ? window.location.hostname : "";
