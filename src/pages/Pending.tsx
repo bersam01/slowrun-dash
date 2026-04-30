@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/hooks/useAuth";
 import { goToDashboard } from "@/lib/dashboardUrl";
+import { supabase } from "@/lib/supabase";
 import { Clock, XCircle, Loader2, LogOut } from "lucide-react";
 
 const Pending = () => {
@@ -26,6 +27,12 @@ const Pending = () => {
 
     return () => window.clearInterval(interval);
   }, [user, profile?.status, refreshProfile]);
+
+  // Notify the user via Discord DM that their request was received (once)
+  useEffect(() => {
+    if (!user || profile?.status !== "pending") return;
+    void supabase.functions.invoke("notify-pending").catch(() => {});
+  }, [user, profile?.status]);
 
   if (loading) {
     return (
