@@ -29,12 +29,14 @@ Deno.serve(async (req) => {
 
   try {
     // Auth: accept either the bot master key (SLOWRUN_BOT_API_KEY) or per-user sk_ key
-    const apiKey = req.headers.get("x-api-key") ?? req.headers.get("X-API-Key");
+    const authorizationHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
+    const bearerToken = authorizationHeader.replace(/^Bearer\s+/i, "");
+    const apiKey = (req.headers.get("x-api-key") ?? req.headers.get("X-API-Key") ?? bearerToken ?? "").trim();
     if (!apiKey) return json({ error: "Missing API key" }, 401);
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const BOT_MASTER_KEY = Deno.env.get("SLOWRUN_BOT_API_KEY") ?? "";
+    const BOT_MASTER_KEY = (Deno.env.get("SLOWRUN_BOT_API_KEY") ?? "").trim();
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
     let ownerUserId = "";
