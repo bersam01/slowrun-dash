@@ -24,17 +24,33 @@ interface AuthState {
   isAdmin: boolean;
 }
 
+type DiscordIdentity = {
+  provider?: string;
+  provider_id?: string;
+  identity_data?: Record<string, unknown>;
+};
+
+const digitsOnly = (value: unknown) => String(value ?? "").replace(/\D/g, "");
+
 const buildProfilePayload = (user: User) => {
   const metadata = user.user_metadata ?? {};
+  const identities = ((user as User & { identities?: DiscordIdentity[] }).identities ?? []);
+  const discordIdentity = identities.find((identity) => identity.provider === "discord");
+  const discordIdFromIdentity = digitsOnly(discordIdentity?.provider_id);
+  const discordIdFromMetadata = digitsOnly(
+    metadata.provider_id ?? metadata.sub ?? metadata.preferred_username ?? null,
+  );
+  const discordDisplayName =
+    (typeof discordIdentity?.identity_data?.global_name === "string" && discordIdentity.identity_data.global_name) ||
+    (typeof discordIdentity?.identity_data?.full_name === "string" && discordIdentity.identity_data.full_name) ||
+    (typeof discordIdentity?.identity_data?.name === "string" && discordIdentity.identity_data.name) ||
+    null;
 
   return {
     id: user.id,
-    discord_id:
-      metadata.provider_id ??
-      metadata.sub ??
-      metadata.preferred_username ??
-      null,
+    discord_id: discordIdFromIdentity || discordIdFromMetadata || null,
     display_name:
+      discordDisplayName ??
       metadata.full_name ??
       metadata.global_name ??
       metadata.name ??
