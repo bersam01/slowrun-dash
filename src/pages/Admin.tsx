@@ -424,8 +424,6 @@ const Admin = () => {
             ))}
           </Card>
         </TabsContent>
-          </Card>
-        </TabsContent>
 
         <TabsContent value="accounting" className="mt-4">
           <div className="grid gap-4 md:grid-cols-3">
