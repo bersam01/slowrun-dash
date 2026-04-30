@@ -52,17 +52,34 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "");
-    const discord_id = body?.discord_id ? String(body.discord_id) : null;
+    const discord_id = body?.discord_id ? String(body.discord_id).trim() : null;
 
     // Resolve target user from discord_id (admin-key model: bot acts on behalf of any linked user)
     async function resolveUserId(): Promise<string | null> {
       if (!discord_id) return null;
-      const { data } = await admin
+
+      const { data, error } = await admin
         .from("profiles")
-        .select("id")
+        .select("id, status, created_at")
         .eq("discord_id", discord_id)
-        .maybeSingle();
-      return data?.id ?? null;
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("resolveUserId failed", { discord_id, error });
+        return null;
+      }
+
+      if (!data?.length) return null;
+
+      if (data.length > 1) {
+        console.warn("Multiple profiles found for discord_id", {
+          discord_id,
+          count: data.length,
+        });
+      }
+
+      const approvedProfile = data.find((profile) => profile.status === "approved");
+      return approvedProfile?.id ?? data[0]?.id ?? null;
     }
 
     if (action === "balance") {
