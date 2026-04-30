@@ -29,6 +29,8 @@ type DiscordIdentity = Record<string, unknown> & {
   identity_data?: Record<string, unknown>;
 };
 
+const normalizeIdentity = (identity: unknown): DiscordIdentity => identity as DiscordIdentity;
+
 const digitsOnly = (value: unknown) => String(value ?? "").replace(/\D/g, "");
 
 const buildProfilePayload = (user: User, identities: DiscordIdentity[] = []) => {
@@ -70,7 +72,7 @@ const buildProfilePayload = (user: User, identities: DiscordIdentity[] = []) => 
 };
 
 const getUserDiscordIdentities = async (user: User): Promise<DiscordIdentity[]> => {
-  const embeddedIdentities = ((user as User & { identities?: DiscordIdentity[] }).identities ?? []);
+  const embeddedIdentities = (((user as User & { identities?: unknown[] }).identities ?? []).map(normalizeIdentity));
   if (embeddedIdentities.length > 0) return embeddedIdentities;
 
   try {
@@ -86,7 +88,7 @@ const getUserDiscordIdentities = async (user: User): Promise<DiscordIdentity[]> 
       return [];
     }
 
-    return data?.identities ?? [];
+    return (data?.identities ?? []).map(normalizeIdentity);
   } catch (error) {
     console.error("Unable to read linked auth identities", error);
     return [];
