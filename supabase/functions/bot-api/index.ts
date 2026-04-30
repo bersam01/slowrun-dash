@@ -1,4 +1,4 @@
-// redeploy: bot-api v7 - force redeploy to refresh fallback master keys
+// redeploy: bot-api v8 - force redeploy and accept apikey header alias for bot clients
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const corsHeaders = {
@@ -37,7 +37,13 @@ Deno.serve(async (req) => {
     // Auth: accept either the bot master key (SLOWRUN_BOT_API_KEY) or per-user sk_ key
     const authorizationHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
     const bearerToken = sanitizeApiKey(authorizationHeader);
-    const apiKey = sanitizeApiKey(req.headers.get("x-api-key") ?? req.headers.get("X-API-Key") ?? bearerToken);
+    const apiKey = sanitizeApiKey(
+      req.headers.get("x-api-key") ??
+      req.headers.get("X-API-Key") ??
+      req.headers.get("apikey") ??
+      req.headers.get("ApiKey") ??
+      bearerToken,
+    );
     if (!apiKey) return json({ error: "Missing API key" }, 401);
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
