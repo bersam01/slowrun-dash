@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/hooks/useAuth";
+import { goToDashboard } from "@/lib/dashboardUrl";
 import { Clock, XCircle, Loader2, LogOut } from "lucide-react";
 
 const Pending = () => {
@@ -13,7 +14,7 @@ const Pending = () => {
   useEffect(() => {
     if (loading) return;
     if (!user) navigate("/login");
-    else if (profile?.status === "approved") navigate("/dashboard");
+    else if (profile?.status === "approved") goToDashboard(navigate);
   }, [loading, user, profile, navigate]);
 
   useEffect(() => {

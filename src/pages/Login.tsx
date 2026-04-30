@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/hooks/useAuth";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { goToDashboard } from "@/lib/dashboardUrl";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -20,7 +21,7 @@ const Login = () => {
 
   useEffect(() => {
     if (loading) return;
-    if (user && profile?.status === "approved") navigate("/dashboard");
+    if (user && profile?.status === "approved") goToDashboard(navigate);
     else if (user) navigate("/pending");
   }, [user, profile, loading, navigate]);
 
@@ -31,7 +32,12 @@ const Login = () => {
     }
 
     try {
-      const redirectTo = `${window.location.origin}/dashboard`;
+      const isSiteHost =
+        window.location.hostname === "slowrun.org" ||
+        window.location.hostname === "www.slowrun.org";
+      const redirectTo = isSiteHost
+        ? "https://dashboard.slowrun.org/dashboard"
+        : `${window.location.origin}/dashboard`;
       const params = new URLSearchParams({
         provider: "discord",
         redirect_to: redirectTo,
