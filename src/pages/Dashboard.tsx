@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Wallet, ShoppingCart, CheckCircle2, Plus, Search, ExternalLink, TrendingUp, Package } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
@@ -20,6 +27,12 @@ interface Purchase {
   price_quota: number;
   status: string;
   created_at: string;
+  category: string | null;
+  seats: string[] | null;
+  retail_price: number | null;
+  commission: number | null;
+  site: string | null;
+  event_date: string | null;
 }
 
 interface ProductPurchase {
@@ -40,6 +53,7 @@ const Dashboard = () => {
   const [productPurchases, setProductPurchases] = useState<ProductPurchase[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Purchase | null>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -65,8 +79,8 @@ const Dashboard = () => {
   }, [profile]);
 
   const filtered = purchases.filter((p) =>
-    p.event_name.toLowerCase().includes(search.toLowerCase()) ||
-    p.store.toLowerCase().includes(search.toLowerCase())
+    (p.event_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
+    (p.store ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
   const greeting = (() => {
@@ -164,12 +178,18 @@ const Dashboard = () => {
               </div>
             )}
             {!isLoading && filtered.map((p) => (
-              <div key={p.id} className="rounded-xl border border-border/60 bg-secondary/20 p-4 transition-colors hover:bg-secondary/40">
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setSelected(p)}
+                className="block w-full rounded-xl border border-border/60 bg-secondary/20 p-4 text-left transition-colors hover:bg-secondary/40 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <h3 className="truncate font-medium">{p.event_name}</h3>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <h3 className="truncate font-medium">🎟️ {p.event_name}</h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <Badge variant="secondary">{p.store}</Badge>
+                      {p.category && <Badge variant="outline">{p.category}</Badge>}
                       <span>Qté {p.quantity}</span>
                       <span>•</span>
                       <span>{new Date(p.created_at).toLocaleString("fr-FR")}</span>
@@ -177,25 +197,16 @@ const Dashboard = () => {
                   </div>
                   <div className="text-right">
                     <div className="font-semibold">{Number(p.price_quota).toFixed(2)} €</div>
+                    <div className="text-[11px] text-muted-foreground">Commission payée</div>
                     <Badge
                       variant={p.status === "success" ? "default" : "secondary"}
-                      className={p.status === "success" ? "bg-success text-success-foreground" : ""}
+                      className={`mt-1 ${p.status === "success" ? "bg-success text-success-foreground" : ""}`}
                     >
                       {p.status}
                     </Badge>
                   </div>
                 </div>
-                {p.product_url && (
-                  <a
-                    href={p.product_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                  >
-                    Voir le panier <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-              </div>
+              </button>
             ))}
           </div>
         </Card>
@@ -228,6 +239,100 @@ const Dashboard = () => {
           </Link>
         </Card>
       </div>
+
+      {/* Détails du panier */}
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent className="max-w-lg">
+          {selected && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  🎟️ {selected.event_name}
+                </DialogTitle>
+                <DialogDescription>
+                  Détails du panier acheté via le bot Discord.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 text-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Événement</div>
+                    <div className="font-medium">{selected.event_name}</div>
+                    {selected.event_date && (
+                      <div className="text-xs text-muted-foreground">{selected.event_date}</div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Site / Store</div>
+                    <div className="font-medium">{selected.site ?? selected.store}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Catégorie</div>
+                    <div className="font-medium">{selected.category ?? "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Quantité</div>
+                    <div className="font-medium">{selected.quantity}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Prix retail (unitaire)</div>
+                    <div className="font-medium">
+                      {selected.retail_price != null ? `${Number(selected.retail_price).toFixed(2)} €` : "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Commission (PAS) — débitée</div>
+                    <div className="font-semibold text-primary">
+                      {Number(selected.price_quota).toFixed(2)} €
+                    </div>
+                  </div>
+                </div>
+
+                {selected.seats && selected.seats.length > 0 && (
+                  <div>
+                    <div className="mb-1 text-xs text-muted-foreground">Seats</div>
+                    <div className="space-y-1 rounded-lg border border-border/60 bg-secondary/30 p-3">
+                      {selected.seats.map((s, i) => (
+                        <div key={i} className="text-xs font-mono">{s}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between border-t border-border/60 pt-3">
+                  <Badge
+                    variant={selected.status === "success" ? "default" : "secondary"}
+                    className={selected.status === "success" ? "bg-success text-success-foreground" : ""}
+                  >
+                    {selected.status}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(selected.created_at).toLocaleString("fr-FR")}
+                  </span>
+                </div>
+
+                {selected.product_url && (
+                  <a
+                    href={selected.product_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                  >
+                    Voir le panier <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
