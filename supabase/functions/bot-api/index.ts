@@ -1,4 +1,4 @@
-// redeploy: bot-api v6 - switch to npm specifier for stable edge deploy
+// redeploy: bot-api v7 - force redeploy to refresh fallback master keys
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const corsHeaders = {
