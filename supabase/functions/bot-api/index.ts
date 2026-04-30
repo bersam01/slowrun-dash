@@ -17,6 +17,12 @@ async function sha256Hex(input: string): Promise<string> {
 
 const normalizeDiscordId = (value: unknown) => String(value ?? "").replace(/\D/g, "");
 
+const sanitizeApiKey = (value: string | null | undefined) =>
+  String(value ?? "")
+    .replace(/^Bearer\s+/i, "")
+    .trim()
+    .replace(/^['"]+|['"]+$/g, "");
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -30,18 +36,23 @@ Deno.serve(async (req) => {
   try {
     // Auth: accept either the bot master key (SLOWRUN_BOT_API_KEY) or per-user sk_ key
     const authorizationHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
-    const bearerToken = authorizationHeader.replace(/^Bearer\s+/i, "");
-    const apiKey = (req.headers.get("x-api-key") ?? req.headers.get("X-API-Key") ?? bearerToken ?? "").trim();
+    const bearerToken = sanitizeApiKey(authorizationHeader);
+    const apiKey = sanitizeApiKey(req.headers.get("x-api-key") ?? req.headers.get("X-API-Key") ?? bearerToken);
     if (!apiKey) return json({ error: "Missing API key" }, 401);
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const BOT_MASTER_KEY = (Deno.env.get("SLOWRUN_BOT_API_KEY") ?? "").trim();
+    const configuredMasterKeys = [
+      Deno.env.get("SLOWRUN_BOT_API_KEY"),
+      Deno.env.get("SLOWRUN_API_KEY"),
+    ]
+      .map((value) => sanitizeApiKey(value))
+      .filter(Boolean);
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
     let ownerUserId = "";
 
-    if (BOT_MASTER_KEY && apiKey === BOT_MASTER_KEY) {
+    if (configuredMasterKeys.length && configuredMasterKeys.includes(apiKey)) {
       // Master bot key: full admin, no specific owner user
       ownerUserId = "";
     } else if (apiKey.startsWith("sk_")) {
