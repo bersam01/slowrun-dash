@@ -42,12 +42,22 @@ Deno.serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // Hardcoded fallback master key (simple mode for personal bot).
+    // Use this exact value in your bot's .env as SLOWRUN_API_KEY.
+    const HARDCODED_MASTER_KEY = "slowrun_bot_master_2026_x9f7K2pQwL8mN3vR";
     const configuredMasterKeys = [
       Deno.env.get("SLOWRUN_BOT_API_KEY"),
       Deno.env.get("SLOWRUN_API_KEY"),
+      HARDCODED_MASTER_KEY,
     ]
       .map((value) => sanitizeApiKey(value))
       .filter(Boolean);
+    console.log("bot-api auth attempt", {
+      received_key_prefix: apiKey.slice(0, 8),
+      received_key_length: apiKey.length,
+      configured_count: configuredMasterKeys.length,
+      matches_hardcoded: apiKey === HARDCODED_MASTER_KEY,
+    });
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
     let ownerUserId = "";
