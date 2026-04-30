@@ -1,5 +1,7 @@
-// redeploy: bot-api v8 - force redeploy and accept apikey header alias for bot clients
+// redeploy: bot-api v9 - force a visible runtime version marker for auth debugging
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+
+const API_VERSION = "bot-api-v9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,7 +28,7 @@ const sanitizeApiKey = (value: string | null | undefined) =>
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders, "Content-Type": "application/json", "x-bot-api-version": API_VERSION },
   });
 }
 
