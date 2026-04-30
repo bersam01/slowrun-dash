@@ -15,7 +15,6 @@ function json(body: unknown, status = 200) {
 }
 
 async function sendDiscordDM(botToken: string, discordId: string, content: string) {
-  // 1) open DM channel
   const dmRes = await fetch("https://discord.com/api/v10/users/@me/channels", {
     method: "POST",
     headers: { Authorization: `Bot ${botToken}`, "Content-Type": "application/json" },
@@ -24,7 +23,6 @@ async function sendDiscordDM(botToken: string, discordId: string, content: strin
   if (!dmRes.ok) throw new Error(`DM channel: ${dmRes.status} ${await dmRes.text()}`);
   const dm = await dmRes.json();
 
-  // 2) send message
   const msgRes = await fetch(`https://discord.com/api/v10/channels/${dm.id}/messages`, {
     method: "POST",
     headers: { Authorization: `Bot ${botToken}`, "Content-Type": "application/json" },
@@ -64,7 +62,8 @@ Deno.serve(async (req) => {
 
     if (!profile) return json({ error: "Profile not found" }, 404);
     if (profile.status !== "pending") return json({ ok: true, skipped: "not_pending" });
-    if (profile.pending_dm_sent_at) return json({ ok: true, skipped: "already_sent" });
+    // pending_dm_sent_at column may not exist yet — we read it defensively
+    if ((profile as any).pending_dm_sent_at) return json({ ok: true, skipped: "already_sent" });
     if (!profile.discord_id) return json({ ok: true, skipped: "no_discord_id" });
 
     const content =
