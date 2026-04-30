@@ -187,7 +187,45 @@ const Admin = () => {
     else { toast.success(approve ? "Crédit ajouté" : "Demande refusée"); load(); }
   };
 
+  const createRefund = async () => {
+    const userId = refundForm.user_id;
+    const amount = Number(refundForm.amount);
+    if (!userId) return toast.error("Sélectionne un utilisateur");
+    if (!Number.isFinite(amount) || amount <= 0) return toast.error("Montant invalide");
+    const fee_pct = 3;
+    const fee_eur = +(amount * fee_pct / 100).toFixed(2);
+    const refund_eur = +(amount - fee_eur).toFixed(2);
+    const user = users.find((x) => x.id === userId);
+    const { error } = await supabase.from("refunds").insert({
+      user_id: userId,
+      user_name: user?.display_name ?? null,
+      amount_eur: amount,
+      fee_pct,
+      fee_eur,
+      refund_eur,
+      note: refundForm.note || null,
+    });
+    if (error) return toast.error(error.message);
+    toast.success(`Remboursement enregistré : ${refund_eur.toFixed(2)} €`);
+    setRefundForm({ user_id: "", amount: "", note: "" });
+    load();
+  };
+
+  const deleteRefund = async (id: string) => {
+    if (!confirm("Supprimer cette ligne ?")) return;
+    const { error } = await supabase.from("refunds").delete().eq("id", id);
+    if (error) toast.error(error.message); else load();
+  };
+
   const pending = users.filter((u) => u.status === "pending");
+  const refundPreview = (() => {
+    const amount = Number(refundForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+    const fee = +(amount * 0.03).toFixed(2);
+    return { fee, refund: +(amount - fee).toFixed(2) };
+  })();
+  const totalRefunded = refunds.reduce((sum, r) => sum + Number(r.refund_eur), 0);
+  const totalFees = refunds.reduce((sum, r) => sum + Number(r.fee_eur), 0);
 
   return (
     <DashboardLayout>
@@ -382,6 +420,99 @@ const Admin = () => {
                   <div className="font-semibold">{Number(p.price_quota).toFixed(2)} €</div>
                   <div className="text-xs text-muted-foreground">{new Date(p.created_at).toLocaleString("fr-FR")}</div>
                 </div>
+              </div>
+            ))}
+          </Card>
+        </TabsContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="accounting" className="mt-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="glass-card p-4">
+              <div className="text-sm text-muted-foreground">Total remboursé</div>
+              <div className="mt-1 text-2xl font-bold">{totalRefunded.toFixed(2)} €</div>
+            </Card>
+            <Card className="glass-card p-4">
+              <div className="text-sm text-muted-foreground">Total frais Stripe (3%)</div>
+              <div className="mt-1 text-2xl font-bold text-warning">{totalFees.toFixed(2)} €</div>
+            </Card>
+            <Card className="glass-card p-4">
+              <div className="text-sm text-muted-foreground">Nb remboursements</div>
+              <div className="mt-1 text-2xl font-bold">{refunds.length}</div>
+            </Card>
+          </div>
+
+          <Card className="glass-card mt-4 p-6">
+            <h3 className="text-lg font-semibold">Calculer un remboursement</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              3% de commission Stripe sont déduits du montant initialement payé par l'utilisateur.
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div>
+                <Label>Utilisateur</Label>
+                <select
+                  className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={refundForm.user_id}
+                  onChange={(e) => setRefundForm({ ...refundForm, user_id: e.target.value })}
+                >
+                  <option value="">— Choisir —</option>
+                  {users.filter((u) => u.status === "approved").map((u) => (
+                    <option key={u.id} value={u.id}>{u.display_name ?? u.id.slice(0, 8)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label>Montant payé (€)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={refundForm.amount}
+                  onChange={(e) => setRefundForm({ ...refundForm, amount: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Note (optionnel)</Label>
+                <Input
+                  value={refundForm.note}
+                  onChange={(e) => setRefundForm({ ...refundForm, note: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {refundPreview && (
+              <div className="mt-4 rounded-lg border border-border/60 bg-secondary/30 p-4">
+                <div className="text-sm text-muted-foreground">Montant à rembourser à l'utilisateur</div>
+                <div className="mt-1 text-3xl font-bold text-primary">{refundPreview.refund.toFixed(2)} €</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Frais Stripe (3%) retenus : {refundPreview.fee.toFixed(2)} €
+                </div>
+              </div>
+            )}
+
+            <Button className="mt-4" onClick={createRefund}>
+              <Calculator className="mr-1 h-4 w-4" />Enregistrer le remboursement
+            </Button>
+          </Card>
+
+          <Card className="glass-card mt-4 p-6">
+            <h3 className="mb-4 text-lg font-semibold">Historique ({refunds.length})</h3>
+            {refunds.length === 0 ? (
+              <div className="py-6 text-center text-muted-foreground">Aucun remboursement.</div>
+            ) : refunds.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 py-3 last:border-0">
+                <div className="min-w-0">
+                  <div className="font-medium">{r.user_name ?? "—"} — {Number(r.refund_eur).toFixed(2)} €</div>
+                  <div className="text-xs text-muted-foreground">
+                    Payé {Number(r.amount_eur).toFixed(2)} € • Frais {Number(r.fee_eur).toFixed(2)} € ({Number(r.fee_pct).toFixed(2)}%)
+                    {r.note && <> • {r.note}</>}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString("fr-FR")}</div>
+                </div>
+                <Button size="sm" variant="destructive" onClick={() => deleteRefund(r.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             ))}
           </Card>
