@@ -1,19 +1,21 @@
 import { Navigate } from "react-router-dom";
-import { isOnDashboardHost } from "@/lib/dashboardUrl";
-import Dashboard from "./Dashboard";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useAuth } from "@/hooks/useAuth";
+import { Loader2 } from "lucide-react";
 
 const Index = () => {
-  // Sur dashboard.slowrun.org, "/" sert directement le dashboard (protégé)
-  if (isOnDashboardHost()) {
+  const { loading, user, profile } = useAuth();
+
+  if (loading) {
     return (
-      <ProtectedRoute>
-        <Dashboard />
-      </ProtectedRoute>
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
-  // Sur slowrun.org / preview / localhost, "/" envoie vers /login
-  return <Navigate to="/login" replace />;
+
+  if (!user) return <Navigate to="/login" replace />;
+  if (!profile || profile.status !== "approved") return <Navigate to="/pending" replace />;
+  return <Navigate to="/dashboard" replace />;
 };
 
 export default Index;
