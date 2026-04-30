@@ -85,25 +85,46 @@ const Admin = () => {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
   const [products, setProducts] = useState<ProductRow[]>([]);
+  const [wallets, setWallets] = useState<Record<string, WalletRow>>({});
+  const [refunds, setRefunds] = useState<RefundRow[]>([]);
   const [creditAmount, setCreditAmount] = useState<Record<string, number>>({});
   const [newProd, setNewProd] = useState({ name: "", description: "", price_eur: 0, image_url: "", stock: "" });
+  const [refundForm, setRefundForm] = useState({ user_id: "", amount: "", note: "" });
 
   const load = async () => {
-    const [u, c, p, pu, pr] = await Promise.all([
+    const [u, c, p, pu, pr, w, rf] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("credit_requests").select("*, profiles(display_name)").order("created_at", { ascending: false }),
       supabase.from("payments").select("*, profiles(display_name)").order("created_at", { ascending: false }).limit(50),
       supabase.from("purchases").select("*, profiles(display_name)").order("created_at", { ascending: false }).limit(50),
       supabase.from("products").select("*").order("created_at", { ascending: false }),
+      supabase.from("wallets").select("user_id, balance, total_credited, total_spent"),
+      supabase.from("refunds").select("*").order("created_at", { ascending: false }).limit(100),
     ]);
     setUsers((u.data ?? []) as AdminProfile[]);
     setCredits((c.data ?? []) as CreditReq[]);
     setPayments((p.data ?? []) as PaymentRow[]);
     setPurchases((pu.data ?? []) as PurchaseRow[]);
     setProducts((pr.data ?? []) as ProductRow[]);
+    const wMap: Record<string, WalletRow> = {};
+    ((w.data ?? []) as WalletRow[]).forEach((row) => { wMap[row.user_id] = row; });
+    setWallets(wMap);
+    setRefunds((rf.data ?? []) as RefundRow[]);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    // Realtime subscription on wallets so balances update live
+    const channel = supabase
+      .channel("admin-wallets")
+      .on("postgres_changes", { event: "*", schema: "public", table: "wallets" }, (payload) => {
+        const row = (payload.new ?? payload.old) as WalletRow | undefined;
+        if (!row?.user_id) return;
+        setWallets((prev) => ({ ...prev, [row.user_id]: { ...prev[row.user_id], ...(payload.new as WalletRow) } }));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const createProduct = async () => {
     if (!newProd.name || newProd.price_eur <= 0) return toast.error("Nom et prix requis");
