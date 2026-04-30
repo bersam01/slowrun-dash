@@ -7,6 +7,14 @@
 const DASHBOARD_HOST = "dashboard.slowrun.org";
 const SITE_HOSTS = new Set(["slowrun.org", "www.slowrun.org"]);
 
+export const shouldUseDashboardDomain = () => {
+  if (typeof window === "undefined") return false;
+  return SITE_HOSTS.has(window.location.hostname);
+};
+
+export const getDashboardUrl = (path: string = "/dashboard") =>
+  `https://${DASHBOARD_HOST}${path}`;
+
 export const goToDashboard = (
   navigate: (path: string) => void,
   path: string = "/dashboard",
@@ -16,10 +24,8 @@ export const goToDashboard = (
     return;
   }
 
-  const host = window.location.hostname;
-
-  if (SITE_HOSTS.has(host)) {
-    window.location.href = `https://${DASHBOARD_HOST}${path}`;
+  if (shouldUseDashboardDomain()) {
+    window.location.href = getDashboardUrl(path);
     return;
   }
 
