@@ -226,18 +226,20 @@ Deno.serve(async (req) => {
       const userId = (await resolveUserId()) ?? (await resolveUserIdFromAuthIdentity());
       if (!userId) return json({ error: "Compte non trouvé." }, 404);
 
-      const event_name = String(body?.event_name ?? "").trim();
-      const store = String(body?.store ?? "").trim();
+      const event_name = String(body?.event_name ?? body?.event ?? "").trim();
+      const store = String(body?.store ?? body?.site ?? "").trim();
       const product_url = body?.product_url ? String(body.product_url) : null;
-      const quantity = Math.max(1, Number(body?.quantity ?? 1));
+      const quantity = Math.max(1, Number(body?.quantity ?? body?.qty ?? 1));
       // amount = ce qui est débité du solde (= commission par défaut)
-      const amount = Number(body?.amount);
-      const status = String(body?.status ?? "success");
-      const category = body?.category ? String(body.category) : null;
-      const site = body?.site ? String(body.site) : null;
-      const event_date = body?.event_date ? String(body.event_date) : null;
-      const retail_price = Number.isFinite(Number(body?.retail_price)) ? Number(body.retail_price) : null;
       const commission = Number.isFinite(Number(body?.commission)) ? Number(body.commission) : null;
+      const amount = Number.isFinite(Number(body?.amount)) ? Number(body.amount) : Number(commission);
+      const status = String(body?.status ?? "success");
+      const categoryRaw = body?.category ?? body?.cat;
+      const category = categoryRaw ? String(categoryRaw).trim() : null;
+      const site = body?.site ? String(body.site).trim() : null;
+      const event_date = body?.event_date ? String(body.event_date).trim() : null;
+      const retailRaw = body?.retail_price ?? body?.retail;
+      const retail_price = Number.isFinite(Number(retailRaw)) ? Number(retailRaw) : null;
       const seatsRaw = body?.seats;
       const seats: string[] | null = Array.isArray(seatsRaw)
         ? seatsRaw.map((s) => String(s))
