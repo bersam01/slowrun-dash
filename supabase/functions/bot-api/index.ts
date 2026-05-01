@@ -1,7 +1,7 @@
-// redeploy: bot-api v11 - force re-deploy, the live version is stale
+// redeploy: bot-api v13 - force re-deploy, validate optional purchase fields in live runtime
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
-const API_VERSION = "bot-api-v12";
+const API_VERSION = "bot-api-v13";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -401,7 +401,7 @@ Deno.serve(async (req) => {
         return json({ error: `Solde insuffisant (${balance.toFixed(2)} q < ${amount.toFixed(2)} q)` }, 400);
       }
 
-      const { error: insErr } = await admin.from("purchases").insert({
+      const insertPayload = {
         user_id: userId,
         event_name,
         store,
@@ -415,8 +415,29 @@ Deno.serve(async (req) => {
         commission,
         site,
         event_date,
+      };
+
+      console.log("[bot-api] purchase insert payload:", insertPayload);
+
+      const { error: insErr } = await admin.from("purchases").insert(insertPayload);
+      if (insErr) {
+        console.error("[bot-api] purchase insert failed:", {
+          message: insErr.message,
+          details: insErr.details,
+          hint: insErr.hint,
+          code: insErr.code,
+        });
+        return json({ error: insErr.message, details: insErr.details, hint: insErr.hint, code: insErr.code }, 500);
+      }
+
+      console.log("[bot-api] purchase insert success:", {
+        event_name,
+        category,
+        retail_price,
+        site,
+        event_date,
+        seats_count: seats?.length ?? 0,
       });
-      if (insErr) return json({ error: insErr.message }, 500);
 
       const new_balance = +(balance - amount).toFixed(2);
       const new_spent = +(Number(wallet?.total_spent ?? 0) + amount).toFixed(2);
