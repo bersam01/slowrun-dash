@@ -81,6 +81,17 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       </header>
 
       <main className="container py-8 animate-fade-in">{children}</main>
+
+      <footer className="border-t border-border/50 py-6">
+        <div className="container flex items-center justify-center">
+          <Link
+            to="/legal"
+            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Mentions légales
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 };
