@@ -19,6 +19,7 @@ interface AdminProfile {
   avatar_url: string | null;
   status: string;
   is_admin: boolean;
+  member_tag: string | null;
   created_at: string;
 }
 interface CreditReq {
@@ -208,6 +209,14 @@ const Admin = () => {
     if (error) return toast.error(error.message);
     toast.success(`Remboursement enregistré : ${refund_eur.toFixed(2)} €`);
     setRefundForm({ user_id: "", amount: "", note: "" });
+    load();
+  };
+
+  const toggleMemberTag = async (userId: string, currentTag: string | null) => {
+    const newTag = currentTag === "MY-MY" ? null : "MY-MY";
+    const { error } = await supabase.from("profiles").update({ member_tag: newTag }).eq("id", userId);
+    if (error) return toast.error(error.message);
+    toast.success(newTag ? "Tag MY-MY ajouté" : "Tag MY-MY retiré");
     load();
   };
 
