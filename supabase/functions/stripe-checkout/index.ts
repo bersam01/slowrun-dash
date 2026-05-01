@@ -76,9 +76,6 @@ Deno.serve(async (req) => {
       ],
       success_url: `${origin}/credit?status=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/credit?status=cancel`,
-      payment_intent_data: {
-        statement_descriptor_suffix: "SLOWRUN",
-      },
       metadata: {
         user_id: userId,
         amount_eur: String(eur),
