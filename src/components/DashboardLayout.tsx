@@ -29,7 +29,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-border/50 bg-background/70 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-border/50 bg-background/95">
         <div className="container flex h-16 items-center justify-between gap-4">
           <Link to="/dashboard"><Logo /></Link>
 
