@@ -294,7 +294,7 @@ const Admin = () => {
                 <div className="flex items-center gap-3">
                   {u.avatar_url && <img src={u.avatar_url} className="h-10 w-10 rounded-full" alt="" />}
                   <div>
-                    <div className="font-medium">{u.display_name ?? "—"} {u.is_admin && <Badge className="ml-1 bg-accent text-accent-foreground">Admin</Badge>}</div>
+                    <div className="font-medium">{u.display_name ?? "—"} {u.is_admin && <Badge className="ml-1 bg-accent text-accent-foreground">Admin</Badge>} {u.member_tag && <Badge className="ml-1 bg-primary text-primary-foreground">{u.member_tag}</Badge>}</div>
                     <div className="text-xs text-muted-foreground">Discord: {u.discord_id ?? "—"}</div>
                     <div className="mt-1 text-xs">
                       <span className="font-semibold text-primary">Solde : {Number(w?.balance ?? 0).toFixed(2)} q</span>
@@ -316,6 +316,9 @@ const Admin = () => {
                   </Button>
                   <Button size="sm" variant="destructive" onClick={() => adjustCredit(u.id, -1)}>
                     <Minus className="mr-1 h-4 w-4" />Retirer
+                  </Button>
+                  <Button size="sm" variant={u.member_tag === "MY-MY" ? "destructive" : "outline"} onClick={() => toggleMemberTag(u.id, u.member_tag)}>
+                    {u.member_tag === "MY-MY" ? "Retirer MY-MY" : "+ MY-MY"}
                   </Button>
                 </div>
               </div>
