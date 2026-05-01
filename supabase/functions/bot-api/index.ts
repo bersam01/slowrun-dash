@@ -25,6 +25,58 @@ const sanitizeApiKey = (value: string | null | undefined) =>
     .trim()
     .replace(/^['"]+|['"]+$/g, "");
 
+const pickFirstPresent = (...values: unknown[]) =>
+  values.find((value) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === "string") return value.trim().length > 0;
+    return true;
+  });
+
+const parseOptionalString = (...values: unknown[]) => {
+  const candidate = pickFirstPresent(...values);
+  if (candidate === null || candidate === undefined) return null;
+  const normalized = String(candidate).trim();
+  return normalized.length ? normalized : null;
+};
+
+const parseOptionalNumber = (...values: unknown[]) => {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+
+    const normalized = String(value).trim();
+    if (!normalized) continue;
+
+    const match = normalized.replace(/,/g, ".").match(/-?\d+(?:\.\d+)?/);
+    if (!match) continue;
+
+    const parsed = Number(match[0]);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return null;
+};
+
+const parseSeats = (...values: unknown[]): string[] | null => {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const seats = value.map((seat) => String(seat).trim()).filter(Boolean);
+      if (seats.length) return seats;
+      continue;
+    }
+
+    if (typeof value === "string") {
+      const seats = value
+        .split(/\r?\n|\s*\|\s*|\s*;\s*/)
+        .map((seat) => seat.trim())
+        .filter(Boolean);
+      if (seats.length) return seats;
+    }
+  }
+
+  return null;
+};
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -228,24 +280,65 @@ Deno.serve(async (req) => {
 
       console.log("[bot-api] purchase body received:", JSON.stringify(body));
 
-      const event_name = String(body?.event_name ?? body?.event ?? "").trim();
-      const store = String(body?.store ?? body?.site ?? "").trim();
-      const product_url = body?.product_url ? String(body.product_url) : null;
-      const quantity = Math.max(1, Number(body?.quantity ?? body?.qty ?? 1));
+      const purchasePayload = [body?.purchase, body?.payload, body?.data].find(
+        (value) => value && typeof value === "object" && !Array.isArray(value),
+      ) as Record<string, unknown> | undefined;
+      const source = purchasePayload ?? body;
+
+      const event_name = parseOptionalString(
+        source?.event_name,
+        source?.event,
+        source?.name,
+        source?.title,
+      ) ?? "";
+      const store = parseOptionalString(
+        source?.store,
+        source?.shop,
+        source?.merchant,
+        source?.site,
+        source?.source,
+      ) ?? "";
+      const product_url = parseOptionalString(
+        source?.product_url,
+        source?.url,
+        source?.link,
+        source?.productLink,
+      );
+      const quantity = Math.max(1, Math.trunc(parseOptionalNumber(source?.quantity, source?.qty, source?.count) ?? 1));
       // amount = ce qui est débité du solde (= commission par défaut)
-      const commission = Number.isFinite(Number(body?.commission)) ? Number(body.commission) : null;
-      const amount = Number.isFinite(Number(body?.amount)) ? Number(body.amount) : Number(commission);
-      const status = String(body?.status ?? "success");
-      const categoryRaw = body?.category ?? body?.cat;
-      const category = categoryRaw ? String(categoryRaw).trim() : null;
-      const site = body?.site ? String(body.site).trim() : null;
-      const event_date = body?.event_date ? String(body.event_date).trim() : null;
-      const retailRaw = body?.retail_price ?? body?.retail;
-      const retail_price = Number.isFinite(Number(retailRaw)) ? Number(retailRaw) : null;
-      const seatsRaw = body?.seats;
-      const seats: string[] | null = Array.isArray(seatsRaw)
-        ? seatsRaw.map((s) => String(s))
-        : (typeof seatsRaw === "string" && seatsRaw.trim() ? [seatsRaw] : null);
+      const commission = parseOptionalNumber(source?.commission, source?.fee, source?.quota);
+      const amount = parseOptionalNumber(source?.amount, source?.debit, source?.charged_amount, commission);
+      const status = parseOptionalString(source?.status, source?.state) ?? "success";
+      const category = parseOptionalString(
+        source?.category,
+        source?.cat,
+        source?.ticket_category,
+        source?.ticketCategory,
+        source?.section,
+      );
+      const site = parseOptionalString(source?.site, source?.store, source?.shop, source?.merchant);
+      const event_date = parseOptionalString(source?.event_date, source?.date, source?.eventDate);
+      const retail_price = parseOptionalNumber(
+        source?.retail_price,
+        source?.retail,
+        source?.retailPrice,
+        source?.face_value,
+        source?.price,
+      );
+      const seats = parseSeats(source?.seats, source?.ticket_seats, source?.places, source?.seat);
+
+      console.log("[bot-api] purchase parsed:", {
+        event_name,
+        store,
+        quantity,
+        amount,
+        commission,
+        category,
+        retail_price,
+        site,
+        event_date,
+        seats_count: seats?.length ?? 0,
+      });
 
       if (!event_name || !store || !Number.isFinite(amount) || amount <= 0) {
         return json({ error: "event_name, store et amount (>0) requis" }, 400);
