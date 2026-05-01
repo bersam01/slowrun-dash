@@ -156,8 +156,12 @@ const Admin = () => {
 
   const setStatus = async (id: string, status: "approved" | "rejected") => {
     const { error } = await supabase.from("profiles").update({ status }).eq("id", id);
-    if (error) toast.error(error.message);
-    else { toast.success(`Compte ${status === "approved" ? "approuvé" : "refusé"}`); load(); }
+    if (error) return toast.error(error.message);
+    toast.success(`Compte ${status === "approved" ? "approuvé" : "refusé"}`);
+    // Notifie l'utilisateur via DM Discord (best effort)
+    supabase.functions.invoke("notify-status", { body: { user_id: id, status } })
+      .then(({ error: e }) => { if (e) console.error("notify-status", e); });
+    load();
   };
 
   const adjustCredit = async (userId: string, sign: 1 | -1) => {
