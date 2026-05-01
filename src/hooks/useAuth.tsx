@@ -11,8 +11,27 @@ export interface Profile {
   avatar_url: string | null;
   status: ProfileStatus;
   is_admin: boolean;
+  member_tag: string | null;
   created_at: string;
 }
+
+const PENDING_MEMBER_TAG_KEY = "slowrun:pending_member_tag";
+
+const readPendingMemberTag = (): string | null => {
+  try {
+    return localStorage.getItem(PENDING_MEMBER_TAG_KEY);
+  } catch {
+    return null;
+  }
+};
+
+const clearPendingMemberTag = () => {
+  try {
+    localStorage.removeItem(PENDING_MEMBER_TAG_KEY);
+  } catch {
+    // ignore
+  }
+};
 
 const NO_PROFILE_FOUND_CODES = new Set(["PGRST116", "406"]);
 
