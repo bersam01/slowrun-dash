@@ -139,6 +139,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const identities = await getUserDiscordIdentities(authUser);
     const nextProfilePayload = buildProfilePayload(authUser, identities);
+    const pendingMemberTag = readPendingMemberTag();
 
     const { data, error } = await supabase
       .from("profiles")
@@ -148,23 +149,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (data) {
       const profile = data as Profile;
+      const shouldSetMemberTag = pendingMemberTag && !profile.member_tag;
       const needsSync =
         (nextProfilePayload.discord_id && nextProfilePayload.discord_id !== profile.discord_id) ||
         (nextProfilePayload.display_name && nextProfilePayload.display_name !== profile.display_name) ||
-        (nextProfilePayload.avatar_url && nextProfilePayload.avatar_url !== profile.avatar_url);
+        (nextProfilePayload.avatar_url && nextProfilePayload.avatar_url !== profile.avatar_url) ||
+        shouldSetMemberTag;
 
-      if (!needsSync) return profile;
+      if (!needsSync) {
+        if (pendingMemberTag) clearPendingMemberTag();
+        return profile;
+      }
+
+      const updatePayload: Record<string, unknown> = {
+        discord_id: nextProfilePayload.discord_id,
+        display_name: nextProfilePayload.display_name,
+        avatar_url: nextProfilePayload.avatar_url,
+      };
+      if (shouldSetMemberTag) updatePayload.member_tag = pendingMemberTag;
 
       const { data: updatedProfile, error: updateError } = await supabase
         .from("profiles")
-        .update({
-          discord_id: nextProfilePayload.discord_id,
-          display_name: nextProfilePayload.display_name,
-          avatar_url: nextProfilePayload.avatar_url,
-        })
+        .update(updatePayload)
         .eq("id", user.id)
         .select("*")
         .maybeSingle();
+
+      if (pendingMemberTag) clearPendingMemberTag();
 
       if (updateError) {
         console.error("Unable to sync profile", updateError);
@@ -179,7 +190,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!NO_PROFILE_FOUND_CODES.has(code)) return null;
     }
 
-    const { error: insertError } = await supabase.from("profiles").insert(nextProfilePayload);
+    const insertPayload: Record<string, unknown> = { ...nextProfilePayload };
+    if (pendingMemberTag) insertPayload.member_tag = pendingMemberTag;
+
+    const { error: insertError } = await supabase.from("profiles").insert(insertPayload);
+    if (pendingMemberTag) clearPendingMemberTag();
     if (insertError) {
       console.error("Unable to create missing profile", insertError);
       return null;
