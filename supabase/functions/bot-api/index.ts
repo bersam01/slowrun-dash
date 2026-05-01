@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
       req.headers.get("ApiKey") ??
       bearerToken,
     );
-    if (!apiKey) return json({ error: "Missing API key" }, 401);
+    if (!apiKey) return json({ error: "Missing API key", version: API_VERSION }, 401);
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
