@@ -1,7 +1,7 @@
 // redeploy: bot-api v11 - force re-deploy, the live version is stale
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
-const API_VERSION = "bot-api-v11";
+const API_VERSION = "bot-api-v12";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,6 +24,16 @@ const sanitizeApiKey = (value: string | null | undefined) =>
     .replace(/^Bearer\s+/i, "")
     .trim()
     .replace(/^['"]+|['"]+$/g, "");
+
+const safeJsonParse = (value: string) => {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+};
+
+const normalizeFieldKey = (value: string) => value.replace(/[^a-z0-9]/gi, "").toLowerCase();
 
 const pickFirstPresent = (...values: unknown[]) =>
   values.find((value) => {
@@ -75,6 +85,43 @@ const parseSeats = (...values: unknown[]): string[] | null => {
   }
 
   return null;
+};
+
+const findNestedField = (input: unknown, aliases: string[]): unknown => {
+  const aliasSet = new Set(aliases.map(normalizeFieldKey));
+  const queue: unknown[] = [input];
+  const seen = new Set<unknown>();
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object") continue;
+    if (seen.has(current)) continue;
+    seen.add(current);
+
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
+    }
+
+    for (const [key, value] of Object.entries(current as Record<string, unknown>)) {
+      if (aliasSet.has(normalizeFieldKey(key))) return value;
+      if (value && typeof value === "object") queue.push(value);
+      if (typeof value === "string") {
+        const parsed = safeJsonParse(value);
+        if (parsed && typeof parsed === "object") queue.push(parsed);
+      }
+    }
+  }
+
+  return null;
+};
+
+const extractFieldFromText = (text: string, aliases: string[]) => {
+  const escapedAliases = aliases.map((alias) => alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = new RegExp(`(?:^|[\\s,;|])(?:${escapedAliases.join("|")})\\s*[:=]\\s*(\"[^\"]+\"|'[^']+'|\\[[^\\]]*\\]|[^,;|\\n\\r]+)`, "i");
+  const match = text.match(pattern);
+  if (!match?.[1]) return null;
+  return match[1].trim().replace(/^['"]|['"]$/g, "");
 };
 
 function json(body: unknown, status = 200) {
