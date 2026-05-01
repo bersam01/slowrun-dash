@@ -331,48 +331,43 @@ Deno.serve(async (req) => {
         (value) => value && typeof value === "object" && !Array.isArray(value),
       ) as Record<string, unknown> | undefined;
       const source = purchasePayload ?? body;
+      const rawTextSources = [body, source]
+        .flatMap((value) => [typeof value === "string" ? value : null, typeof value === "object" && value ? JSON.stringify(value) : null])
+        .filter((value): value is string => Boolean(value));
+
+      const readField = (...aliases: string[]) => {
+        const nested = findNestedField(source, aliases) ?? findNestedField(body, aliases);
+        if (nested !== null && nested !== undefined) return nested;
+        for (const rawText of rawTextSources) {
+          const extracted = extractFieldFromText(rawText, aliases);
+          if (extracted !== null) return extracted;
+        }
+        return null;
+      };
 
       const event_name = parseOptionalString(
-        source?.event_name,
-        source?.event,
-        source?.name,
-        source?.title,
+        readField("event_name", "event", "name", "title"),
       ) ?? "";
       const store = parseOptionalString(
-        source?.store,
-        source?.shop,
-        source?.merchant,
-        source?.site,
-        source?.source,
+        readField("store", "shop", "merchant", "site", "source"),
       ) ?? "";
       const product_url = parseOptionalString(
-        source?.product_url,
-        source?.url,
-        source?.link,
-        source?.productLink,
+        readField("product_url", "url", "link", "productLink"),
       );
-      const quantity = Math.max(1, Math.trunc(parseOptionalNumber(source?.quantity, source?.qty, source?.count) ?? 1));
+      const quantity = Math.max(1, Math.trunc(parseOptionalNumber(readField("quantity", "qty", "count")) ?? 1));
       // amount = ce qui est débité du solde (= commission par défaut)
-      const commission = parseOptionalNumber(source?.commission, source?.fee, source?.quota);
-      const amount = parseOptionalNumber(source?.amount, source?.debit, source?.charged_amount, commission);
-      const status = parseOptionalString(source?.status, source?.state) ?? "success";
+      const commission = parseOptionalNumber(readField("commission", "fee", "quota"));
+      const amount = parseOptionalNumber(readField("amount", "debit", "charged_amount"), commission);
+      const status = parseOptionalString(readField("status", "state")) ?? "success";
       const category = parseOptionalString(
-        source?.category,
-        source?.cat,
-        source?.ticket_category,
-        source?.ticketCategory,
-        source?.section,
+        readField("category", "cat", "ticket_category", "ticketCategory", "section"),
       );
-      const site = parseOptionalString(source?.site, source?.store, source?.shop, source?.merchant);
-      const event_date = parseOptionalString(source?.event_date, source?.date, source?.eventDate);
+      const site = parseOptionalString(readField("site", "store", "shop", "merchant"));
+      const event_date = parseOptionalString(readField("event_date", "date", "eventDate"));
       const retail_price = parseOptionalNumber(
-        source?.retail_price,
-        source?.retail,
-        source?.retailPrice,
-        source?.face_value,
-        source?.price,
+        readField("retail_price", "retail", "retailPrice", "face_value", "price"),
       );
-      const seats = parseSeats(source?.seats, source?.ticket_seats, source?.places, source?.seat);
+      const seats = parseSeats(readField("seats", "ticket_seats", "places", "seat"));
 
       console.log("[bot-api] purchase parsed:", {
         event_name,
