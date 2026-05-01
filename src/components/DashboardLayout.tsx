@@ -29,10 +29,10 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   ];
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-border/50 bg-background/95">
-        <div className="container flex h-16 items-center justify-between gap-4">
-          <Link to="/dashboard"><Logo /></Link>
+    <div className="min-h-screen pb-20 md:pb-0">
+      <header className="sticky top-0 z-40 border-b border-border/50 bg-background/95 backdrop-blur">
+        <div className="container flex h-16 items-center justify-between gap-2">
+          <Link to="/dashboard" className="shrink-0"><Logo /></Link>
 
           <nav className="hidden items-center gap-1 md:flex">
             {navItems.map(({ to, label, icon: Icon }) => {
@@ -55,7 +55,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             })}
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {profile && (
               <div className="hidden items-center gap-2 rounded-full border border-border/60 bg-secondary/40 py-1 pl-1 pr-3 sm:flex">
                 {profile.avatar_url && (
@@ -73,16 +73,43 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 )}
               </div>
             )}
-            <Button variant="destructive" size="sm" onClick={handleLogout}>
-              <LogOut className="mr-1 h-4 w-4" /> Log Out
+            {/* Mobile compact avatar */}
+            {profile?.avatar_url && (
+              <img src={profile.avatar_url} alt="" className="h-8 w-8 rounded-full sm:hidden" />
+            )}
+            <Button variant="destructive" size="sm" onClick={handleLogout} className="px-2 sm:px-3">
+              <LogOut className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">Log Out</span>
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="container py-8 animate-fade-in">{children}</main>
+      <main className="container py-6 md:py-8 animate-fade-in">{children}</main>
 
-      <footer className="border-t border-border/50 py-6">
+      {/* Mobile bottom nav */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border/50 bg-background/95 backdrop-blur md:hidden">
+        <div className="grid h-16 grid-cols-4 px-1 pb-[env(safe-area-inset-bottom)]">
+          {navItems.map(({ to, label, icon: Icon }) => {
+            const active = location.pathname === to;
+            return (
+              <Link
+                key={to}
+                to={to}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 rounded-lg text-[11px] font-medium transition-colors",
+                  active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className={cn("h-5 w-5", active && "scale-110 transition-transform")} />
+                <span>{label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
+      <footer className="hidden border-t border-border/50 py-6 md:block">
         <div className="container flex items-center justify-center">
           <Link
             to="/legal"
