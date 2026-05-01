@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.notify-pending]
 verify_jwt = true
+
+[functions.notify-status]
+verify_jwt = true
