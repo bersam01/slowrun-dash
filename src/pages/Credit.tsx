@@ -123,10 +123,10 @@ const Credit = () => {
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <Button onClick={handleCheckout} disabled={loading} size="lg" className="flex-1 gap-2 shadow-[var(--shadow-glow)]">
+            <Button onClick={handleCheckout} disabled={loading} size="lg" className="flex-1 gap-2 h-14 text-base sm:h-11 sm:text-sm shadow-[var(--shadow-glow)]">
               <CreditCard className="h-5 w-5" /> Payer par carte (Stripe)
             </Button>
-            <Button onClick={handleManualRequest} disabled={loading} variant="outline" size="lg" className="flex-1 gap-2">
+            <Button onClick={handleManualRequest} disabled={loading} variant="outline" size="lg" className="flex-1 gap-2 h-14 text-base sm:h-11 sm:text-sm">
               <Sparkles className="h-5 w-5" /> Demande manuelle (admin)
             </Button>
           </div>
