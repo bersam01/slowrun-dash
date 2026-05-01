@@ -2,7 +2,8 @@ import { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
-import { LayoutDashboard, ShieldCheck, Package, LogOut, Wallet } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { LayoutDashboard, ShieldCheck, Package, LogOut, Wallet, Sparkles } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +62,15 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                   <img src={profile.avatar_url} alt="" className="h-7 w-7 rounded-full" />
                 )}
                 <span className="text-sm font-medium">{profile.display_name ?? "User"}</span>
+                {profile.member_tag && (
+                  <Badge
+                    variant="default"
+                    className="ml-1 gap-1 bg-gradient-to-r from-primary to-accent px-2 py-0.5 text-[10px] uppercase tracking-wider text-primary-foreground"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    {profile.member_tag}
+                  </Badge>
+                )}
               </div>
             )}
             <Button variant="destructive" size="sm" onClick={handleLogout}>
