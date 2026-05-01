@@ -7,6 +7,7 @@ import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Login from "./pages/Login.tsx";
 import MyMy from "./pages/MyMy.tsx";
+import Legal from "./pages/Legal.tsx";
 import Pending from "./pages/Pending.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
 import Credit from "./pages/Credit.tsx";
@@ -28,6 +29,8 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
           <Route path="/my-my" element={<MyMy />} />
+          <Route path="/legal" element={<Legal />} />
+          <Route path="/mentions-legales" element={<Legal />} />
           <Route path="/pending" element={<Pending />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/credit" element={<ProtectedRoute><Credit /></ProtectedRoute>} />

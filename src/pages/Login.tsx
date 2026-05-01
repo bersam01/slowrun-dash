@@ -84,6 +84,9 @@ const Login = () => {
           <p className="mt-6 text-center text-xs text-muted-foreground">
             En te connectant, tu acceptes que ton ID Discord soit lié à ton compte SlowRun.
           </p>
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            <a href="/legal" className="underline hover:text-foreground">Mentions légales</a>
+          </p>
         </div>
       </Card>
     </main>
