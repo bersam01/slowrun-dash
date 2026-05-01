@@ -32,8 +32,8 @@ const Legal = () => {
           <section>
             <h2 className="text-xl font-semibold text-foreground">Hébergement</h2>
             <p>
-              Le site est hébergé par <strong>Lovable</strong> (https://lovable.dev) et son
-              infrastructure backend repose sur <strong>Supabase</strong>.
+              Le site est hébergé par un prestataire technique tiers. Pour toute demande
+              relative à l'hébergement, merci de nous contacter.
             </p>
           </section>
 
