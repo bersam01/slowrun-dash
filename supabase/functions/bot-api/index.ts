@@ -190,8 +190,12 @@ Deno.serve(async (req) => {
       return json({ error: "Invalid API key" }, 401);
     }
 
-    const body = await req.json().catch(() => ({}));
+    const rawBody = await req.text();
+    let body: any = {};
+    try { body = JSON.parse(rawBody); } catch (_) {}
+    console.log("bot-api raw body received", { rawBody, contentType: req.headers.get("content-type") });
     const action = String(body?.action ?? "");
+    console.log("bot-api parsed action", { action, keys: Object.keys(body || {}), purchaseKeys: body?.purchase ? Object.keys(body.purchase) : null });
     const discord_id = body?.discord_id ? normalizeDiscordId(body.discord_id) : null;
 
     // Resolve target user from discord_id (admin-key model: bot acts on behalf of any linked user)
