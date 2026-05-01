@@ -1,7 +1,7 @@
-// redeploy: bot-api v13 - force re-deploy, validate optional purchase fields in live runtime
+// redeploy: bot-api v14 - force re-deploy 2026-05-01, expose version + insert logs
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
-const API_VERSION = "bot-api-v13";
+const API_VERSION = "bot-api-v14";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
