@@ -226,6 +226,8 @@ Deno.serve(async (req) => {
       const userId = (await resolveUserId()) ?? (await resolveUserIdFromAuthIdentity());
       if (!userId) return json({ error: "Compte non trouvé." }, 404);
 
+      console.log("[bot-api] purchase body received:", JSON.stringify(body));
+
       const event_name = String(body?.event_name ?? body?.event ?? "").trim();
       const store = String(body?.store ?? body?.site ?? "").trim();
       const product_url = body?.product_url ? String(body.product_url) : null;
