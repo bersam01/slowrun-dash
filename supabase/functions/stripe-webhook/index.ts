@@ -1,4 +1,4 @@
-// stripe-webhook: reçoit les events Stripe et crédite automatiquement (redeploy v2)
+// stripe-webhook: reçoit les events Stripe et crédite automatiquement (redeploy v3)
 // Doit être déployé avec verify_jwt = false (Stripe n'envoie pas de JWT)
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@18.5.0";
