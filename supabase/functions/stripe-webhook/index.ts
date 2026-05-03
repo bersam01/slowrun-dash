@@ -1,4 +1,4 @@
-// stripe-webhook: reçoit les events Stripe et crédite automatiquement
+// stripe-webhook: reçoit les events Stripe et crédite automatiquement (redeploy v2)
 // Doit être déployé avec verify_jwt = false (Stripe n'envoie pas de JWT)
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@18.5.0";
@@ -6,6 +6,11 @@ import Stripe from "npm:stripe@18.5.0";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "stripe-signature, content-type",
+};
+
+const jsonHeaders = {
+  ...corsHeaders,
+  "Content-Type": "application/json",
 };
 
 Deno.serve(async (req) => {
@@ -58,9 +63,9 @@ Deno.serve(async (req) => {
 
     if (existing) {
       console.log("Already processed:", session.id);
-      return new Response(JSON.stringify({ received: true, duplicate: true }), {
-        headers: { "Content-Type": "application/json" },
-      });
+       return new Response(JSON.stringify({ received: true, duplicate: true }), {
+         headers: jsonHeaders,
+       });
     }
 
     // Crédite le wallet
@@ -149,6 +154,6 @@ Deno.serve(async (req) => {
   }
 
   return new Response(JSON.stringify({ received: true }), {
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders,
   });
 });
