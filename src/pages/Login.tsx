@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
@@ -18,12 +18,14 @@ const DiscordIcon = ({ className }: { className?: string }) => (
 const Login = () => {
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirect = searchParams.get("redirect") || "/dashboard";
 
   useEffect(() => {
     if (loading) return;
-    if (user && profile?.status === "approved") goToDashboard(navigate);
+    if (user && profile?.status === "approved") goToDashboard(navigate, redirect);
     else if (user) navigate("/pending");
-  }, [user, profile, loading, navigate]);
+  }, [user, profile, loading, navigate, redirect]);
 
   const handleDiscordLogin = async () => {
     if (!isSupabaseConfigured) {
@@ -35,8 +37,8 @@ const Login = () => {
       // En prod on envoie l'utilisateur directement sur le sous-domaine dashboard
       // pour que la session Supabase soit créée sur le bon hostname.
       const redirectTo = isOnDashboardHost()
-        ? `${window.location.origin}/dashboard`
-        : getDashboardUrl("/dashboard");
+        ? `${window.location.origin}${redirect}`
+        : getDashboardUrl(redirect);
       const params = new URLSearchParams({
         provider: "discord",
         redirect_to: redirectTo,
