@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,52 @@ const Credit = () => {
   const { profile } = useAuth();
   const [amount, setAmount] = useState<number>(50);
   const [loading, setLoading] = useState(false);
+
+   useEffect(() => {
+    const verifyStripeReturn = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const status = params.get("status");
+      const sessionId = params.get("session_id");
+
+      if (status !== "success" || !sessionId || !profile?.id) return;
+
+      setLoading(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+
+        if (!accessToken) throw new Error("Session expirée");
+
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL ?? "https://jisiahjqkxuctzmrsqzd.supabase.co"}/functions/v1/stripe-checkout`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "sb_publishable_0dgR1Ed5bYz8mx6cGapjqw_le7V33t2",
+          },
+          body: JSON.stringify({ session_id: sessionId }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload?.error ?? `Erreur ${response.status}`);
+
+        if (payload?.credited) {
+          toast.success(`Paiement confirmé, ${Number(payload.amount).toFixed(2)} € ajoutés au solde.`);
+        } else if (payload?.duplicate) {
+          toast.success("Paiement déjà pris en compte.");
+        }
+
+        const cleanUrl = `${window.location.pathname}`;
+        window.history.replaceState({}, "", cleanUrl);
+      } catch (err) {
+        toast.error((err as Error).message ?? "Impossible de confirmer le paiement.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void verifyStripeReturn();
+  }, [profile?.id]);
 
   const handleCheckout = async () => {
     if (!profile) return;
