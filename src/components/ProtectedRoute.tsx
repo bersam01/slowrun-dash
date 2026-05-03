@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 
@@ -9,6 +9,7 @@ interface ProtectedRouteProps {
 
 export const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps) => {
   const { loading, user, profile, isAdmin } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -18,7 +19,10 @@ export const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRout
     );
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    const redirect = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace />;
+  }
   if (!profile) return <Navigate to="/pending" replace />;
   if (profile.status !== "approved") return <Navigate to="/pending" replace />;
   if (requireAdmin && !isAdmin) return <Navigate to="/dashboard" replace />;
