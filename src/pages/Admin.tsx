@@ -257,6 +257,20 @@ const Admin = () => {
     if (error) toast.error(error.message); else load();
   };
 
+  const saveShareConfig = async () => {
+    const payload = {
+      id: true,
+      bot_name: shareConfigDraft.bot_name?.trim() || null,
+      partner_user_id: shareConfigDraft.partner_user_id || null,
+      share_pct: Number(shareConfigDraft.share_pct) || 50,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("revenue_share_config").upsert(payload, { onConflict: "id" });
+    if (error) return toast.error(error.message);
+    toast.success("Config partage sauvegardée");
+    load();
+  };
+
   const pending = users.filter((u) => u.status === "pending");
   const refundPreview = (() => {
     const amount = Number(refundForm.amount);
@@ -266,6 +280,11 @@ const Admin = () => {
   })();
   const totalRefunded = refunds.reduce((sum, r) => sum + Number(r.refund_eur), 0);
   const totalFees = refunds.reduce((sum, r) => sum + Number(r.fee_eur), 0);
+
+  const sharePct = Number(shareConfig.share_pct ?? 50);
+  const partner = users.find((u) => u.id === shareConfig.partner_user_id);
+  const totalCommissionShared = sharedPurchases.reduce((s, p) => s + Number(p.commission ?? 0), 0);
+  const totalDueToPartner = +(totalCommissionShared * sharePct / 100).toFixed(2);
 
   return (
     <DashboardLayout>
