@@ -50,6 +50,10 @@ interface PurchaseRow {
   created_at: string;
   commission: number | null;
   source_bot: string | null;
+  category?: string | null;
+  seats?: string[] | null;
+  site?: string | null;
+  event_date?: string | null;
   profiles?: { display_name: string | null };
 }
 
@@ -104,6 +108,28 @@ const matchesBotName = (sourceBot: string | null | undefined, configuredBot: str
   return source === configured || source.startsWith(configured) || configured.startsWith(source);
 };
 
+const inferPurchaseBot = (purchase: PurchaseRow) => {
+  if (purchase.source_bot) return purchase.source_bot;
+
+  const storeText = `${purchase.store ?? ""} ${purchase.site ?? ""}`.toLowerCase();
+  const categoryText = String(purchase.category ?? "").toLowerCase();
+  const seats = purchase.seats ?? [];
+  const hasIsoEventDate = /^\d{4}-\d{2}-\d{2}t\d{2}:\d{2}:\d{2}/i.test(String(purchase.event_date ?? ""));
+  const looksLikeTicketmaster =
+    storeText.includes("ticketmaster fr") ||
+    storeText.includes("ticketmaster") ||
+    storeText === "tm" ||
+    storeText.startsWith("tm ");
+  const hasCiroStylePlacement =
+    /gradin|section|tribune|pelouse|carre|carré|balcon|fosse/i.test(categoryText) || seats.length > 0;
+
+  if (looksLikeTicketmaster && hasIsoEventDate && hasCiroStylePlacement) {
+    return "CiroAIO";
+  }
+
+  return null;
+};
+
 const Admin = () => {
   const [users, setUsers] = useState<AdminProfile[]>([]);
   const [credits, setCredits] = useState<CreditReq[]>([]);
@@ -148,9 +174,8 @@ const Admin = () => {
       const { data: sp } = await supabase
         .from("purchases")
         .select("*, profiles(display_name)")
-        .not("source_bot", "is", null)
         .order("created_at", { ascending: false });
-      setSharedPurchases(((sp ?? []) as PurchaseRow[]).filter((purchase) => matchesBotName(purchase.source_bot, cfg.bot_name)));
+      setSharedPurchases(((sp ?? []) as PurchaseRow[]).filter((purchase) => matchesBotName(inferPurchaseBot(purchase), cfg.bot_name)));
     } else {
       setSharedPurchases([]);
     }
@@ -505,8 +530,8 @@ const Admin = () => {
                   <div className="font-medium truncate">{p.event_name}</div>
                   <div className="text-xs text-muted-foreground">{p.profiles?.display_name ?? "—"} • {p.store} • Qté {p.quantity}</div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>Source bot : {p.source_bot || "—"}</span>
-                    {shareConfig.bot_name && !matchesBotName(p.source_bot, shareConfig.bot_name) && (
+                    <span>Source bot : {inferPurchaseBot(p) || "—"}</span>
+                    {shareConfig.bot_name && !matchesBotName(inferPurchaseBot(p), shareConfig.bot_name) && (
                       <Button size="sm" variant="outline" onClick={() => assignPurchaseToTrackedBot(p.id)}>
                         Ajouter à {shareConfig.bot_name}
                       </Button>
