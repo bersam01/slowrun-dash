@@ -17,6 +17,7 @@ interface SharedPurchase {
 }
 
 interface PartnerData {
+  isPartner?: boolean;
   config: { bot_name: string | null; share_pct: number };
   purchases: SharedPurchase[];
 }
@@ -31,7 +32,7 @@ const Collab = () => {
     (async () => {
       const { data: res, error } = await supabase.functions.invoke("partner-shared-data");
       if (cancelled) return;
-      if (error || (res as { error?: string })?.error) {
+      if (error || !(res as PartnerData | null)?.isPartner) {
         setForbidden(true);
         setLoading(false);
         return;
