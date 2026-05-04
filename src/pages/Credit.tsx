@@ -17,12 +17,52 @@ const Credit = () => {
   const [loading, setLoading] = useState(false);
 
    useEffect(() => {
+    const reconcileRecentPaidSessions = async () => {
+      if (!profile?.id) return;
+
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) return;
+
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL ?? "https://jisiahjqkxuctzmrsqzd.supabase.co"}/functions/v1/stripe-checkout`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "sb_publishable_0dgR1Ed5bYz8mx6cGapjqw_le7V33t2",
+          },
+          body: JSON.stringify({ reconcile: true }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) return;
+
+        if (Number(payload?.repaired_count ?? 0) > 0) {
+          const totalAmount = (payload.repaired_sessions ?? []).reduce(
+            (sum: number, session: { amount?: number }) => sum + Number(session.amount ?? 0),
+            0,
+          );
+
+          toast.success("Paiement Stripe régularisé", {
+            description: `${Number(totalAmount).toFixed(2)} € ont été ajoutés à votre solde.`,
+            duration: 7000,
+          });
+        }
+      } catch {
+        // best effort uniquement
+      }
+    };
+
     const verifyStripeReturn = async () => {
       const params = new URLSearchParams(window.location.search);
       const status = params.get("status");
       const sessionId = params.get("session_id");
 
-      if (status !== "success" || !sessionId || !profile?.id) return;
+      if (status !== "success" || !sessionId || !profile?.id) {
+        void reconcileRecentPaidSessions();
+        return;
+      }
 
       setLoading(true);
       try {
