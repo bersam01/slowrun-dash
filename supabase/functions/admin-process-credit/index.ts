@@ -102,6 +102,37 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Notification Discord admin
+    const discordWebhook = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
+    if (discordWebhook) {
+      try {
+        const { data: profile } = await admin
+          .from("profiles")
+          .select("display_name, discord_id")
+          .eq("id", reqRow.user_id)
+          .maybeSingle();
+        await fetch(discordWebhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            embeds: [{
+              title: approve ? "✅ Demande de crédit approuvée" : "❌ Demande de crédit refusée",
+              color: approve ? 0x22c55e : 0xef4444,
+              fields: [
+                { name: "Utilisateur", value: profile?.display_name ?? "—", inline: true },
+                { name: "Discord ID", value: profile?.discord_id ?? "—", inline: true },
+                { name: "Montant", value: `**${Number(reqRow.amount).toFixed(2)} €**`, inline: true },
+                { name: "Demande", value: requestId, inline: false },
+              ],
+              timestamp: new Date().toISOString(),
+            }],
+          }),
+        });
+      } catch (e) {
+        console.error("Discord notify failed", e);
+      }
+    }
+
     return json({ ok: true });
   } catch (e) {
     console.error("admin-process-credit error", e);
