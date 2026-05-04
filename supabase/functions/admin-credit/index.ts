@@ -93,6 +93,39 @@ Deno.serve(async (req) => {
       note,
     });
 
+    // Notification Discord admin
+    const discordWebhook = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
+    if (discordWebhook) {
+      try {
+        const { data: profile } = await admin
+          .from("profiles")
+          .select("display_name, discord_id")
+          .eq("id", userId)
+          .maybeSingle();
+        const isCredit = amount > 0;
+        await fetch(discordWebhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            embeds: [{
+              title: isCredit ? "🟢 Crédit admin" : "🔴 Débit admin",
+              color: isCredit ? 0x3b82f6 : 0xef4444,
+              fields: [
+                { name: "Utilisateur", value: profile?.display_name ?? "—", inline: true },
+                { name: "Discord ID", value: profile?.discord_id ?? "—", inline: true },
+                { name: "Montant", value: `**${amount.toFixed(2)} €**`, inline: true },
+                { name: "Nouveau solde", value: `${newBalance.toFixed(2)} €`, inline: true },
+                ...(note ? [{ name: "Note", value: note, inline: false }] : []),
+              ],
+              timestamp: new Date().toISOString(),
+            }],
+          }),
+        });
+      } catch (e) {
+        console.error("Discord notify failed", e);
+      }
+    }
+
     return json({ ok: true, new_balance: newBalance });
   } catch (e) {
     console.error("admin-credit error", e);
