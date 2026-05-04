@@ -20,50 +20,21 @@ const truncateDiscordValue = (value: unknown, fallback = "—", maxLength = 1000
 };
 
 async function sendDiscordAdminWebhook(webhookUrl: string, payload: { title: string; color: number; content: string; fields: Array<{ name: string; value: string; inline?: boolean }> }) {
-  const url = new URL(webhookUrl.trim());
-  url.searchParams.set("wait", "true");
+  const response = await fetch(webhookUrl.trim(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      content: truncateDiscordValue([
+        payload.title,
+        payload.content,
+        ...payload.fields.map((field) => `${truncateDiscordValue(field.name, "Champ", 80)}: ${truncateDiscordValue(field.value, "—", 220)}`),
+      ].join("\n"), "Notification admin", 1800),
+    }),
+  });
 
-  const sendPayload = async (body: Record<string, unknown>) => {
-    const response = await fetch(url.toString(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    const responseText = await response.text();
-    if (!response.ok) {
-      throw new Error(`Discord webhook ${response.status}: ${responseText || response.statusText}`);
-    }
-  };
-
-  try {
-    await sendPayload({
-      username: "SlowRun Admin",
-      allowed_mentions: { parse: [] },
-      content: truncateDiscordValue(payload.content, "—", 500),
-      embeds: [{
-        title: truncateDiscordValue(payload.title, "Notification", 250),
-        color: payload.color,
-        fields: payload.fields,
-        timestamp: new Date().toISOString(),
-      }],
-    });
-  } catch (embedError) {
-    const fallbackContent = truncateDiscordValue([
-      payload.title,
-      payload.content,
-      ...payload.fields.map((field) => `${truncateDiscordValue(field.name, "Champ", 80)}: ${truncateDiscordValue(field.value, "—", 220)}`),
-    ].join("\n"), "Notification admin", 1800);
-
-    try {
-      await sendPayload({
-        username: "SlowRun Admin",
-        allowed_mentions: { parse: [] },
-        content: fallbackContent,
-      });
-    } catch (fallbackError) {
-      throw new Error(`${(embedError as Error).message} | fallback: ${(fallbackError as Error).message}`);
-    }
+  const responseText = await response.text();
+  if (!response.ok) {
+    throw new Error(`Discord webhook ${response.status}: ${responseText || response.statusText}`);
   }
 }
 
@@ -181,6 +152,8 @@ Deno.serve(async (req) => {
         console.error("Discord notify failed", e);
         notificationError = (e as Error).message;
       }
+    } else {
+      notificationError = "DISCORD_ADMIN_WEBHOOK_URL manquant";
     }
 
     return json({ ok: true, notification_sent: !notificationError, notification_error: notificationError });
