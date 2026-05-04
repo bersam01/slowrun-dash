@@ -80,9 +80,9 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
     const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
-    if (claimsErr || !claims?.claims?.sub) return json({ error: "Unauthorized" }, 401);
-    const callerId = claims.claims.sub as string;
+    const { data: authData, error: authError } = await userClient.auth.getUser(token);
+    const callerId = authData?.user?.id;
+    if (authError || !callerId) return json({ error: "Unauthorized", isPartner: false }, 401);
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (!cfg || !cfg.partner_user_id || cfg.partner_user_id !== callerId) {
-      return json({ error: "Forbidden" }, 403);
+      return json({ isPartner: false, config: null, purchases: [] });
     }
 
     let sharedPurchases: PurchaseRow[] = [];
@@ -107,6 +107,7 @@ Deno.serve(async (req) => {
     }
 
     return json({
+      isPartner: true,
       config: {
         bot_name: cfg.bot_name ?? null,
         share_pct: Number(cfg.share_pct ?? 50),
