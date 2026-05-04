@@ -13,13 +13,20 @@ interface DashboardLayoutProps {
 }
 
 export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
-  const { profile, isAdmin, signOut } = useAuth();
+  const { loading, profile, isAdmin, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isPartner, setIsPartner] = useState(false);
+  const [partnerCheckDone, setPartnerCheckDone] = useState(false);
 
   useEffect(() => {
-    if (!profile) return;
+    if (loading) return;
+    if (!profile) {
+      setIsPartner(false);
+      setPartnerCheckDone(true);
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       try {
@@ -27,21 +34,26 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         if (cancelled) return;
         if (error) {
           console.debug("[collab] not partner:", error.message);
+          setIsPartner(false);
+          setPartnerCheckDone(true);
           return;
         }
-        if (data && !(data as { error?: string }).error) {
-          setIsPartner(true);
-        } else {
-          console.debug("[collab] not partner:", (data as { error?: string })?.error);
-        }
+        const partner = Boolean((data as { isPartner?: boolean } | null)?.isPartner);
+        setIsPartner(partner);
+        setPartnerCheckDone(true);
+        if (!partner) console.debug("[collab] not partner: no matching partner config");
       } catch (e) {
         console.debug("[collab] invoke failed:", e);
+        if (!cancelled) {
+          setIsPartner(false);
+          setPartnerCheckDone(true);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [profile]);
+  }, [loading, profile]);
 
   const handleLogout = async () => {
     await signOut();
@@ -52,7 +64,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/credit", label: "Créditer", icon: Wallet },
     { to: "/products", label: "Produits", icon: Package },
-    ...(isPartner && !isAdmin ? [{ to: "/collab", label: "Collab", icon: Share2 }] : []),
+    ...(partnerCheckDone && isPartner && !isAdmin ? [{ to: "/collab", label: "Collab", icon: Share2 }] : []),
     ...(isAdmin ? [{ to: "/admin", label: "Admin", icon: ShieldCheck }] : []),
   ];
 
