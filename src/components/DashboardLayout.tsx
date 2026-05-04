@@ -22,9 +22,21 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     if (!profile) return;
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase.functions.invoke("partner-shared-data");
-      if (cancelled) return;
-      if (!error && data && !(data as { error?: string }).error) setIsPartner(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("partner-shared-data");
+        if (cancelled) return;
+        if (error) {
+          console.debug("[collab] not partner:", error.message);
+          return;
+        }
+        if (data && !(data as { error?: string }).error) {
+          setIsPartner(true);
+        } else {
+          console.debug("[collab] not partner:", (data as { error?: string })?.error);
+        }
+      } catch (e) {
+        console.debug("[collab] invoke failed:", e);
+      }
     })();
     return () => {
       cancelled = true;
