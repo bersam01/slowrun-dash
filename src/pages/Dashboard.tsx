@@ -60,6 +60,25 @@ const Dashboard = () => {
     let cancelled = false;
     (async () => {
       setLoadingData(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+
+        if (accessToken) {
+          await fetch(`${import.meta.env.VITE_SUPABASE_URL ?? "https://jisiahjqkxuctzmrsqzd.supabase.co"}/functions/v1/stripe-checkout`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "sb_publishable_0dgR1Ed5bYz8mx6cGapjqw_le7V33t2",
+            },
+            body: JSON.stringify({ reconcile: true }),
+          });
+        }
+      } catch {
+        // best effort uniquement
+      }
+
       const [walletRes, purchaseRes, prodRes] = await Promise.all([
         supabase.from("wallets").select("balance, total_spent, total_credited").eq("user_id", profile.id).maybeSingle(),
         supabase.from("purchases").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }).limit(20),
