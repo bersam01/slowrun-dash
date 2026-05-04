@@ -259,14 +259,14 @@ const Admin = () => {
     const { data, error } = await supabase.functions.invoke("admin-process-credit", {
       body: { request_id: id, approve },
     });
-    if (error) toast.error(error.message);
-    else {
-      toast.success(approve ? "Crédit ajouté" : "Demande refusée");
-      if (data?.notification_sent === false && data?.notification_error) {
-        toast.error(`Webhook Discord en erreur: ${data.notification_error}`);
-      }
-      load();
+    if (error) return toast.error(error.message);
+    if (data?.error) return toast.error(data.error);
+
+    toast.success(approve ? "Crédit ajouté" : "Demande refusée");
+    if (data?.notification_sent === false) {
+      toast.error(`Webhook Discord en erreur: ${data?.notification_error || "erreur inconnue"}`);
     }
+    load();
   };
 
   const createRefund = async () => {
