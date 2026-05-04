@@ -13,6 +13,38 @@ function json(body: unknown, status = 200) {
   });
 }
 
+const truncateDiscordValue = (value: unknown, fallback = "—") => {
+  const text = String(value ?? "").trim();
+  if (!text) return fallback;
+  return text.length > 1000 ? `${text.slice(0, 997)}...` : text;
+};
+
+async function sendDiscordAdminWebhook(webhookUrl: string, payload: { title: string; color: number; content: string; fields: Array<{ name: string; value: string; inline?: boolean }> }) {
+  const url = new URL(webhookUrl);
+  url.searchParams.set("wait", "true");
+
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: "SlowRun Admin",
+      allowed_mentions: { parse: [] },
+      content: payload.content,
+      embeds: [{
+        title: payload.title,
+        color: payload.color,
+        fields: payload.fields,
+        timestamp: new Date().toISOString(),
+      }],
+    }),
+  });
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    throw new Error(`Discord webhook ${response.status}: ${responseText || response.statusText}`);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -95,6 +127,7 @@ Deno.serve(async (req) => {
 
     // Notification Discord admin
     const discordWebhook = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
+    let notificationError: string | null = null;
     if (discordWebhook) {
       try {
         const { data: profile } = await admin
@@ -103,30 +136,25 @@ Deno.serve(async (req) => {
           .eq("id", userId)
           .maybeSingle();
         const isCredit = amount > 0;
-        await fetch(discordWebhook, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            embeds: [{
-              title: isCredit ? "🟢 Crédit admin" : "🔴 Débit admin",
-              color: isCredit ? 0x3b82f6 : 0xef4444,
-              fields: [
-                { name: "Utilisateur", value: profile?.display_name ?? "—", inline: true },
-                { name: "Discord ID", value: profile?.discord_id ?? "—", inline: true },
-                { name: "Montant", value: `**${amount.toFixed(2)} €**`, inline: true },
-                { name: "Nouveau solde", value: `${newBalance.toFixed(2)} €`, inline: true },
-                ...(note ? [{ name: "Note", value: note, inline: false }] : []),
-              ],
-              timestamp: new Date().toISOString(),
-            }],
-          }),
+        await sendDiscordAdminWebhook(discordWebhook, {
+          title: isCredit ? "🟢 Crédit admin" : "🔴 Débit admin",
+          color: isCredit ? 0x3b82f6 : 0xef4444,
+          content: `${isCredit ? "Crédit admin" : "Débit admin"} • ${truncateDiscordValue(profile?.display_name)}`,
+          fields: [
+            { name: "Utilisateur", value: truncateDiscordValue(profile?.display_name), inline: true },
+            { name: "Discord ID", value: truncateDiscordValue(profile?.discord_id), inline: true },
+            { name: "Montant", value: truncateDiscordValue(`${amount.toFixed(2)} €`), inline: true },
+            { name: "Nouveau solde", value: truncateDiscordValue(`${newBalance.toFixed(2)} €`), inline: true },
+            ...(note ? [{ name: "Note", value: truncateDiscordValue(note), inline: false }] : []),
+          ],
         });
       } catch (e) {
         console.error("Discord notify failed", e);
+        notificationError = (e as Error).message;
       }
     }
 
-    return json({ ok: true, new_balance: newBalance });
+    return json({ ok: true, new_balance: newBalance, notification_sent: !notificationError, notification_error: notificationError });
   } catch (e) {
     console.error("admin-credit error", e);
     return json({ error: (e as Error).message }, 500);

@@ -248,16 +248,25 @@ const Admin = () => {
       return;
     }
     toast.success(sign > 0 ? `+${raw} q crédité` : `-${raw} q retiré`);
+    if (data?.notification_sent === false && data?.notification_error) {
+      toast.error(`Webhook Discord en erreur: ${data.notification_error}`);
+    }
     setCreditAmount((s) => ({ ...s, [userId]: 0 }));
     load();
   };
 
   const handleCreditReq = async (id: string, approve: boolean) => {
-    const { error } = await supabase.functions.invoke("admin-process-credit", {
+    const { data, error } = await supabase.functions.invoke("admin-process-credit", {
       body: { request_id: id, approve },
     });
     if (error) toast.error(error.message);
-    else { toast.success(approve ? "Crédit ajouté" : "Demande refusée"); load(); }
+    else {
+      toast.success(approve ? "Crédit ajouté" : "Demande refusée");
+      if (data?.notification_sent === false && data?.notification_error) {
+        toast.error(`Webhook Discord en erreur: ${data.notification_error}`);
+      }
+      load();
+    }
   };
 
   const createRefund = async () => {
