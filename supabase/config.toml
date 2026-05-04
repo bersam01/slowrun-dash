@@ -29,3 +29,6 @@ verify_jwt = true
 
 [functions.buy-product]
 verify_jwt = true
+
+[functions.partner-shared-data]
+verify_jwt = true
