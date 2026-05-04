@@ -29,9 +29,12 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
     const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
-    if (claimsErr || !claims?.claims?.sub) return json({ error: "Unauthorized" }, 401);
-    const callerId = claims.claims.sub as string;
+    const { data: userData, error: userErr } = await userClient.auth.getUser(token);
+    if (userErr || !userData?.user?.id) {
+      console.error("auth getUser failed", userErr);
+      return json({ error: "Unauthorized" }, 401);
+    }
+    const callerId = userData.user.id;
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
@@ -52,10 +55,18 @@ Deno.serve(async (req) => {
     if (reqRow.status !== "pending") return json({ error: "Demande déjà traitée" }, 400);
 
     const newStatus = approve ? "approved" : "rejected";
-    const { error: updReqErr } = await admin
+    let updReqErr = (await admin
       .from("credit_requests")
       .update({ status: newStatus, processed_at: new Date().toISOString(), processed_by: callerId })
-      .eq("id", requestId);
+      .eq("id", requestId)).error;
+    if (updReqErr) {
+      console.error("update with processed_at/by failed, retrying with status only", updReqErr);
+      const retry = await admin
+        .from("credit_requests")
+        .update({ status: newStatus })
+        .eq("id", requestId);
+      updReqErr = retry.error;
+    }
     if (updReqErr) return json({ error: updReqErr.message }, 500);
 
     if (approve) {
