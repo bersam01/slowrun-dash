@@ -13,6 +13,131 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+async function notifyDiscordTopup(admin: ReturnType<typeof createClient>, userId: string, amount: number, newBalance: number, sessionId: string) {
+  const discordWebhook = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
+  if (!discordWebhook) return;
+
+  try {
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("display_name, discord_id")
+      .eq("id", userId)
+      .maybeSingle();
+
+    await fetch(discordWebhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        embeds: [{
+          title: "💰 Nouveau topup (Stripe)",
+          color: 0x22c55e,
+          fields: [
+            { name: "Utilisateur", value: profile?.display_name ?? "—", inline: true },
+            { name: "Discord ID", value: profile?.discord_id ?? "—", inline: true },
+            { name: "Montant", value: `**${amount.toFixed(2)} €**`, inline: true },
+            { name: "Nouveau solde", value: `${newBalance.toFixed(2)} €`, inline: true },
+            { name: "Session", value: sessionId, inline: false },
+          ],
+          timestamp: new Date().toISOString(),
+        }],
+      }),
+    });
+  } catch (e) {
+    console.error("Discord notify failed", e);
+  }
+}
+
+async function applyStripeCredit(admin: ReturnType<typeof createClient>, userId: string, sessionId: string, amount: number, note: string) {
+  const { data: existingPayment } = await admin
+    .from("payments")
+    .select("id, status")
+    .eq("provider_ref", sessionId)
+    .maybeSingle();
+
+  if (existingPayment?.status === "paid") {
+    const { data: wallet } = await admin
+      .from("wallets")
+      .select("balance")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    return {
+      ok: true,
+      duplicate: true,
+      credited: false,
+      session_id: sessionId,
+      amount,
+      new_balance: Number(wallet?.balance ?? 0),
+    };
+  }
+
+  const { data: wallet } = await admin
+    .from("wallets")
+    .select("balance, total_credited, total_spent")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const currentBalance = Number(wallet?.balance ?? 0);
+  const totalCredited = Number(wallet?.total_credited ?? 0);
+  const newBalance = +(currentBalance + amount).toFixed(2);
+  const newCredited = +(totalCredited + amount).toFixed(2);
+
+  if (wallet) {
+    const { error } = await admin
+      .from("wallets")
+      .update({
+        balance: newBalance,
+        total_credited: newCredited,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await admin.from("wallets").insert({
+      user_id: userId,
+      balance: newBalance,
+      total_credited: newCredited,
+      total_spent: 0,
+    });
+    if (error) throw new Error(error.message);
+  }
+
+  if (existingPayment?.id) {
+    const { error } = await admin
+      .from("payments")
+      .update({
+        user_id: userId,
+        amount,
+        provider: "stripe",
+        status: "paid",
+        note,
+      })
+      .eq("id", existingPayment.id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await admin.from("payments").insert({
+      user_id: userId,
+      amount,
+      provider: "stripe",
+      provider_ref: sessionId,
+      status: "paid",
+      note,
+    });
+    if (error) throw new Error(error.message);
+  }
+
+  await notifyDiscordTopup(admin, userId, amount, newBalance, sessionId);
+
+  return {
+    ok: true,
+    duplicate: false,
+    credited: true,
+    session_id: sessionId,
+    amount,
+    new_balance: newBalance,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -41,6 +166,7 @@ Deno.serve(async (req) => {
     const userEmail = (claims.claims.email as string) ?? undefined;
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
     const sessionId = typeof body?.session_id === "string" ? body.session_id.trim() : "";
+    const shouldReconcile = body?.reconcile === true;
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
@@ -58,91 +184,42 @@ Deno.serve(async (req) => {
       if (!Number.isFinite(amount) || amount <= 0) return json({ error: "Montant invalide" }, 400);
 
       const admin = createClient(supabaseUrl, supabaseServiceRoleKey);
+      return json(await applyStripeCredit(admin, userId, session.id, amount, "Stripe checkout verified on return"));
+    }
 
-      const { data: existing } = await admin
-        .from("payments")
-        .select("id")
-        .eq("provider_ref", session.id)
-        .maybeSingle();
+    if (shouldReconcile) {
+      if (!supabaseServiceRoleKey) return json({ error: "Missing server configuration" }, 500);
 
-      if (existing) {
-        return json({ ok: true, duplicate: true, credited: false, session_id: session.id });
-      }
+      const admin = createClient(supabaseUrl, supabaseServiceRoleKey);
+      const since = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
+      const sessions = await stripe.checkout.sessions.list({ limit: 100, created: { gte: since } });
+      const matchingSessions = sessions.data.filter((session) =>
+        session.metadata?.user_id === userId &&
+        session.payment_status === "paid" &&
+        session.status === "complete",
+      );
 
-      const { data: wallet } = await admin
-        .from("wallets")
-        .select("balance, total_credited, total_spent")
-        .eq("user_id", userId)
-        .maybeSingle();
+      const repaired: Array<{ session_id: string; amount: number; new_balance: number }> = [];
+      for (const session of matchingSessions) {
+        const amount = Number(session.metadata?.amount_eur ?? ((session.amount_total ?? 0) / 100));
+        if (!Number.isFinite(amount) || amount <= 0) continue;
 
-      const currentBalance = Number(wallet?.balance ?? 0);
-      const totalCredited = Number(wallet?.total_credited ?? 0);
-      const newBalance = +(currentBalance + amount).toFixed(2);
-      const newCredited = +(totalCredited + amount).toFixed(2);
-
-      if (wallet) {
-        const { error } = await admin
-          .from("wallets")
-          .update({
-            balance: newBalance,
-            total_credited: newCredited,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("user_id", userId);
-        if (error) return json({ error: error.message }, 500);
-      } else {
-        const { error } = await admin.from("wallets").insert({
-          user_id: userId,
-          balance: newBalance,
-          total_credited: newCredited,
-          total_spent: 0,
-        });
-        if (error) return json({ error: error.message }, 500);
-      }
-
-      const { error: paymentError } = await admin.from("payments").insert({
-        user_id: userId,
-        amount,
-        provider: "stripe",
-        provider_ref: session.id,
-        status: "paid",
-        note: "Stripe checkout verified on return",
-      });
-      if (paymentError) return json({ error: paymentError.message }, 500);
-
-      // Notification Discord admin
-      const discordWebhook = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
-      if (discordWebhook) {
-        try {
-          const { data: profile } = await admin
-            .from("profiles")
-            .select("display_name, discord_id")
-            .eq("id", userId)
-            .maybeSingle();
-          await fetch(discordWebhook, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              embeds: [{
-                title: "💰 Nouveau topup (Stripe)",
-                color: 0x22c55e,
-                fields: [
-                  { name: "Utilisateur", value: profile?.display_name ?? "—", inline: true },
-                  { name: "Discord ID", value: profile?.discord_id ?? "—", inline: true },
-                  { name: "Montant", value: `**${amount.toFixed(2)} €**`, inline: true },
-                  { name: "Nouveau solde", value: `${newBalance.toFixed(2)} €`, inline: true },
-                  { name: "Session", value: session.id, inline: false },
-                ],
-                timestamp: new Date().toISOString(),
-              }],
-            }),
+        const result = await applyStripeCredit(admin, userId, session.id, amount, "Stripe checkout reconciled automatically");
+        if (result.credited) {
+          repaired.push({
+            session_id: session.id,
+            amount,
+            new_balance: Number(result.new_balance ?? 0),
           });
-        } catch (e) {
-          console.error("Discord notify failed", e);
         }
       }
 
-      return json({ ok: true, credited: true, session_id: session.id, new_balance: newBalance, amount });
+      return json({
+        ok: true,
+        repaired_count: repaired.length,
+        repaired_sessions: repaired,
+        new_balance: repaired.at(-1)?.new_balance ?? null,
+      });
     }
 
     const eur = Number(body?.amount);
@@ -173,6 +250,29 @@ Deno.serve(async (req) => {
         amount_eur: String(eur),
       },
     });
+
+    if (supabaseServiceRoleKey) {
+      const admin = createClient(supabaseUrl, supabaseServiceRoleKey);
+      const { data: existingPending } = await admin
+        .from("payments")
+        .select("id")
+        .eq("provider_ref", session.id)
+        .maybeSingle();
+
+      if (!existingPending) {
+        const { error: pendingError } = await admin.from("payments").insert({
+          user_id: userId,
+          amount: eur,
+          provider: "stripe",
+          provider_ref: session.id,
+          status: "pending",
+          note: "Stripe checkout session created",
+        });
+        if (pendingError) {
+          console.error("Unable to create pending Stripe payment", pendingError);
+        }
+      }
+    }
 
     return json({ url: session.url, id: session.id });
   } catch (e) {
