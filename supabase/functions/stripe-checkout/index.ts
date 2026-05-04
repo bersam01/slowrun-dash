@@ -110,6 +110,38 @@ Deno.serve(async (req) => {
       });
       if (paymentError) return json({ error: paymentError.message }, 500);
 
+      // Notification Discord admin
+      const discordWebhook = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
+      if (discordWebhook) {
+        try {
+          const { data: profile } = await admin
+            .from("profiles")
+            .select("display_name, discord_id")
+            .eq("id", userId)
+            .maybeSingle();
+          await fetch(discordWebhook, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              embeds: [{
+                title: "💰 Nouveau topup (Stripe)",
+                color: 0x22c55e,
+                fields: [
+                  { name: "Utilisateur", value: profile?.display_name ?? "—", inline: true },
+                  { name: "Discord ID", value: profile?.discord_id ?? "—", inline: true },
+                  { name: "Montant", value: `**${amount.toFixed(2)} €**`, inline: true },
+                  { name: "Nouveau solde", value: `${newBalance.toFixed(2)} €`, inline: true },
+                  { name: "Session", value: session.id, inline: false },
+                ],
+                timestamp: new Date().toISOString(),
+              }],
+            }),
+          });
+        } catch (e) {
+          console.error("Discord notify failed", e);
+        }
+      }
+
       return json({ ok: true, credited: true, session_id: session.id, new_balance: newBalance, amount });
     }
 

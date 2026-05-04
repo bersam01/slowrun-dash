@@ -45,7 +45,10 @@ const Credit = () => {
         if (!response.ok) throw new Error(payload?.error ?? `Erreur ${response.status}`);
 
         if (payload?.credited) {
-          toast.success(`Paiement confirmé, ${Number(payload.amount).toFixed(2)} € ajoutés au solde.`);
+          toast.success("✅ Paiement réussi !", {
+            description: `Vous avez été crédité de ${Number(payload.amount).toFixed(2)} €. Nouveau solde : ${Number(payload.new_balance ?? 0).toFixed(2)} €.`,
+            duration: 6000,
+          });
         } else if (payload?.duplicate) {
           toast.success("Paiement déjà pris en compte.");
         }
@@ -95,6 +98,9 @@ const Credit = () => {
       }
 
       if (payload?.url) {
+        toast.success(`Redirection vers le paiement (${amount.toFixed(2)} €)...`, {
+          description: "Vous serez crédité automatiquement après paiement.",
+        });
         window.location.href = payload.url;
       } else {
         toast.error("Impossible de créer la session de paiement.");
