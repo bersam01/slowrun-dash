@@ -332,6 +332,7 @@ const Admin = () => {
   };
 
   const pending = users.filter((u) => u.status === "pending");
+  const rejectedUsers = users.filter((u) => u.status === "rejected");
   const refundPreview = (() => {
     const amount = Number(refundForm.amount);
     if (!Number.isFinite(amount) || amount <= 0) return null;
@@ -435,6 +436,39 @@ const Admin = () => {
               </div>
               );
             })}
+
+            {rejectedUsers.length > 0 && (
+              <div className="mt-8 border-t border-border/40 pt-6">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold">Comptes refusés</h3>
+                    <p className="text-sm text-muted-foreground">Tu peux réactiver un compte refusé en un clic.</p>
+                  </div>
+                  <Badge variant="destructive">{rejectedUsers.length}</Badge>
+                </div>
+
+                <div className="space-y-3">
+                  {rejectedUsers.map((u) => (
+                    <div key={u.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/40 p-3">
+                      <div className="flex items-center gap-3">
+                        {u.avatar_url && <img src={u.avatar_url} className="h-10 w-10 rounded-full" alt="" />}
+                        <div>
+                          <div className="font-medium">{u.display_name ?? "—"}</div>
+                          <div className="text-xs text-muted-foreground">Discord: {u.discord_id ?? "—"}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Badge variant="destructive">rejected</Badge>
+                        <Button size="sm" onClick={() => setStatus(u.id, "approved")}>
+                          <Check className="mr-1 h-4 w-4" />Réapprouver
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </Card>
         </TabsContent>
 
