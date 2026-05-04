@@ -49,6 +49,29 @@ const parseOptionalString = (...values: unknown[]) => {
   return normalized.length ? normalized : null;
 };
 
+const normalizeBotName = (value: string | null | undefined) =>
+  String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[•·].*$/u, "")
+    .replace(/\bv?\d+(?:\.\d+)+(?:\b.*)?$/i, "")
+    .replace(/[^a-z0-9]+/gi, "")
+    .toLowerCase()
+    .trim();
+
+const extractKnownBotName = (...values: unknown[]) => {
+  const knownBots = ["CiroAIO", "KalysBot", "TSolutions"] as const;
+  const haystack = values
+    .flatMap((value) => {
+      if (typeof value === "string") return [value];
+      if (value && typeof value === "object") return [JSON.stringify(value)];
+      return [];
+    })
+    .join(" ");
+
+  const normalizedHaystack = normalizeBotName(haystack);
+  return knownBots.find((bot) => normalizedHaystack.includes(normalizeBotName(bot))) ?? null;
+};
+
 const parseOptionalNumber = (...values: unknown[]) => {
   for (const value of values) {
     if (value === null || value === undefined) continue;
@@ -374,7 +397,7 @@ Deno.serve(async (req) => {
       const seats = parseSeats(readField("seats", "ticket_seats", "places", "seat"));
       const source_bot = parseOptionalString(
         readField("source_bot", "bot", "bot_id", "bot_name", "botName", "botId"),
-      );
+      ) ?? extractKnownBotName(body, source, rawBody);
 
       console.log("[bot-api] purchase parsed:", {
         event_name,
