@@ -24,5 +24,8 @@ verify_jwt = true
 [functions.admin-process-credit]
 verify_jwt = true
 
+[functions.admin-tag-purchase-bot]
+verify_jwt = true
+
 [functions.buy-product]
 verify_jwt = true
