@@ -13,6 +13,112 @@ const jsonHeaders = {
   "Content-Type": "application/json",
 };
 
+async function notifyDiscordTopup(admin: ReturnType<typeof createClient>, userId: string, amount: number, newBalance: number, sessionId: string) {
+  const discordWebhook = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
+  if (!discordWebhook) return;
+
+  try {
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("display_name, discord_id")
+      .eq("id", userId)
+      .maybeSingle();
+
+    await fetch(discordWebhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        embeds: [
+          {
+            title: "💰 Nouveau topup",
+            color: 0x22c55e,
+            fields: [
+              { name: "Utilisateur", value: profile?.display_name ?? "—", inline: true },
+              { name: "Discord ID", value: profile?.discord_id ?? "—", inline: true },
+              { name: "Montant", value: `**${amount.toFixed(2)} €**`, inline: true },
+              { name: "Nouveau solde", value: `${newBalance.toFixed(2)} €`, inline: true },
+              { name: "Session", value: sessionId, inline: false },
+            ],
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      }),
+    });
+  } catch (e) {
+    console.error("Discord notify failed", e);
+  }
+}
+
+async function applyStripeCredit(admin: ReturnType<typeof createClient>, userId: string, sessionId: string, amount: number, note: string) {
+  const { data: existingPayment } = await admin
+    .from("payments")
+    .select("id, status")
+    .eq("provider_ref", sessionId)
+    .maybeSingle();
+
+  if (existingPayment?.status === "paid") {
+    return { duplicate: true };
+  }
+
+  const { data: wallet } = await admin
+    .from("wallets")
+    .select("balance, total_credited")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const currentBalance = Number(wallet?.balance ?? 0);
+  const totalCredited = Number(wallet?.total_credited ?? 0);
+  const newBalance = +(currentBalance + amount).toFixed(2);
+  const newCredited = +(totalCredited + amount).toFixed(2);
+
+  if (wallet) {
+    const { error } = await admin
+      .from("wallets")
+      .update({
+        balance: newBalance,
+        total_credited: newCredited,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await admin.from("wallets").insert({
+      user_id: userId,
+      balance: newBalance,
+      total_credited: newCredited,
+      total_spent: 0,
+    });
+    if (error) throw new Error(error.message);
+  }
+
+  if (existingPayment?.id) {
+    const { error } = await admin
+      .from("payments")
+      .update({
+        user_id: userId,
+        amount,
+        provider: "stripe",
+        status: "paid",
+        note,
+      })
+      .eq("id", existingPayment.id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await admin.from("payments").insert({
+      user_id: userId,
+      amount,
+      provider: "stripe",
+      provider_ref: sessionId,
+      status: "paid",
+      note,
+    });
+    if (error) throw new Error(error.message);
+  }
+
+  await notifyDiscordTopup(admin, userId, amount, newBalance, sessionId);
+  return { duplicate: false, newBalance };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -20,8 +126,6 @@ Deno.serve(async (req) => {
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const discordWebhook = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
-
   if (!stripeKey || !webhookSecret || !supabaseUrl || !serviceRole) {
     console.error("Missing env vars");
     return new Response("Missing config", { status: 500 });
@@ -54,100 +158,12 @@ Deno.serve(async (req) => {
       return new Response("Invalid metadata", { status: 400 });
     }
 
-    // Idempotence : éviter de créditer 2x le même session_id
-    const { data: existing } = await admin
-      .from("payments")
-      .select("id")
-      .eq("provider_ref", session.id)
-      .maybeSingle();
-
-    if (existing) {
+    const result = await applyStripeCredit(admin, userId, session.id, amount, "Stripe checkout completed");
+    if (result.duplicate) {
       console.log("Already processed:", session.id);
-       return new Response(JSON.stringify({ received: true, duplicate: true }), {
-         headers: jsonHeaders,
-       });
-    }
-
-    // Crédite le wallet
-    const { data: wallet } = await admin
-      .from("wallets")
-      .select("balance, total_credited, total_spent")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    const currentBalance = Number(wallet?.balance ?? 0);
-    const totalCredited = Number(wallet?.total_credited ?? 0);
-    const newBalance = +(currentBalance + amount).toFixed(2);
-    const newCredited = +(totalCredited + amount).toFixed(2);
-
-    if (wallet) {
-      const { error } = await admin
-        .from("wallets")
-        .update({
-          balance: newBalance,
-          total_credited: newCredited,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", userId);
-      if (error) {
-        console.error("Wallet update failed", error);
-        return new Response("DB error", { status: 500 });
-      }
-    } else {
-      const { error } = await admin.from("wallets").insert({
-        user_id: userId,
-        balance: newBalance,
-        total_credited: newCredited,
-        total_spent: 0,
+      return new Response(JSON.stringify({ received: true, duplicate: true }), {
+        headers: jsonHeaders,
       });
-      if (error) {
-        console.error("Wallet insert failed", error);
-        return new Response("DB error", { status: 500 });
-      }
-    }
-
-    // Log payment
-    await admin.from("payments").insert({
-      user_id: userId,
-      amount,
-      provider: "stripe",
-      provider_ref: session.id,
-      status: "paid",
-      note: "Stripe checkout completed",
-    });
-
-    // Notification Discord admin
-    if (discordWebhook) {
-      try {
-        const { data: profile } = await admin
-          .from("profiles")
-          .select("display_name, discord_id")
-          .eq("id", userId)
-          .maybeSingle();
-
-        await fetch(discordWebhook, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            embeds: [
-              {
-                title: "💰 Nouveau topup",
-                color: 0x22c55e,
-                fields: [
-                  { name: "Utilisateur", value: profile?.display_name ?? "—", inline: true },
-                  { name: "Discord ID", value: profile?.discord_id ?? "—", inline: true },
-                  { name: "Montant", value: `**${amount.toFixed(2)} €**`, inline: true },
-                  { name: "Nouveau solde", value: `${newBalance.toFixed(2)} €`, inline: true },
-                  { name: "Session", value: session.id, inline: false },
-                ],
-                timestamp: new Date().toISOString(),
-              },
-            ],
-          }),
-        });
-      } catch (e) {
-        console.error("Discord notify failed", e);
-      }
     }
 
     console.log(`Credited ${amount}€ to ${userId}`);
