@@ -1,7 +1,7 @@
-// redeploy: bot-api v14 - force re-deploy 2026-05-01, expose version + insert logs
+// redeploy: bot-api v15 - force re-deploy 2026-05-04, improve CiroAIO detection
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
-const API_VERSION = "bot-api-v14";
+const API_VERSION = "bot-api-v15";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -69,6 +69,15 @@ const extractKnownBotName = (...values: unknown[]) => {
     .join(" ");
 
   const normalizedHaystack = normalizeBotName(haystack);
+  if (
+    normalizedHaystack.includes("ciroaio") ||
+    normalizedHaystack.includes("sectionrowseat") ||
+    normalizedHaystack.includes("sessionlink") ||
+    normalizedHaystack.includes("openextension") ||
+    normalizedHaystack.includes("ticketmasterfr")
+  ) {
+    return "CiroAIO";
+  }
   return knownBots.find((bot) => normalizedHaystack.includes(normalizeBotName(bot))) ?? null;
 };
 
