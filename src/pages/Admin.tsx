@@ -287,6 +287,16 @@ const Admin = () => {
     load();
   };
 
+  const assignPurchaseToTrackedBot = async (purchaseId: string) => {
+    if (!shareConfig.bot_name) return toast.error("Configure d'abord le bot suivi dans l'onglet Partage");
+    const { error } = await supabase.functions.invoke("admin-tag-purchase-bot", {
+      body: { purchase_id: purchaseId, source_bot: shareConfig.bot_name },
+    });
+    if (error) return toast.error(error.message);
+    toast.success("Panier ajouté au partage");
+    load();
+  };
+
   const pending = users.filter((u) => u.status === "pending");
   const refundPreview = (() => {
     const amount = Number(refundForm.amount);
@@ -494,6 +504,14 @@ const Admin = () => {
                 <div className="min-w-0">
                   <div className="font-medium truncate">{p.event_name}</div>
                   <div className="text-xs text-muted-foreground">{p.profiles?.display_name ?? "—"} • {p.store} • Qté {p.quantity}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>Source bot : {p.source_bot || "—"}</span>
+                    {shareConfig.bot_name && !matchesBotName(p.source_bot, shareConfig.bot_name) && (
+                      <Button size="sm" variant="outline" onClick={() => assignPurchaseToTrackedBot(p.id)}>
+                        Ajouter à {shareConfig.bot_name}
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 <div className="text-right">
                   <div className="font-semibold">{Number(p.price_quota).toFixed(2)} €</div>
