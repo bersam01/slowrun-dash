@@ -48,7 +48,15 @@ interface PurchaseRow {
   quantity: number;
   status: string;
   created_at: string;
+  commission: number | null;
+  source_bot: string | null;
   profiles?: { display_name: string | null };
+}
+
+interface RevenueShareConfig {
+  bot_name: string | null;
+  partner_user_id: string | null;
+  share_pct: number;
 }
 
 interface ProductRow {
