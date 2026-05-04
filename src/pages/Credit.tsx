@@ -10,6 +10,8 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 
 const PRESETS = [10, 25, 50, 100, 250, 500];
+const STRIPE_SYNC_MAX_ATTEMPTS = 10;
+const STRIPE_SYNC_RETRY_MS = 2000;
 
 const Credit = () => {
   const { profile } = useAuth();
@@ -17,6 +19,10 @@ const Credit = () => {
   const [loading, setLoading] = useState(false);
 
    useEffect(() => {
+    let cancelled = false;
+
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
     const reconcileRecentPaidSessions = async () => {
       if (!profile?.id) return;
 
@@ -66,43 +72,68 @@ const Credit = () => {
 
       setLoading(true);
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const accessToken = sessionData.session?.access_token;
+        let lastError = "Impossible de confirmer le paiement.";
 
-        if (!accessToken) throw new Error("Session expirée");
+        for (let attempt = 1; attempt <= STRIPE_SYNC_MAX_ATTEMPTS; attempt += 1) {
+          if (cancelled) return;
 
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL ?? "https://jisiahjqkxuctzmrsqzd.supabase.co"}/functions/v1/stripe-checkout`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "sb_publishable_0dgR1Ed5bYz8mx6cGapjqw_le7V33t2",
-          },
-          body: JSON.stringify({ session_id: sessionId }),
-        });
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
 
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload?.error ?? `Erreur ${response.status}`);
+          if (!accessToken) {
+            lastError = "Session expirée";
+          } else {
+            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL ?? "https://jisiahjqkxuctzmrsqzd.supabase.co"}/functions/v1/stripe-checkout`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+                apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "sb_publishable_0dgR1Ed5bYz8mx6cGapjqw_le7V33t2",
+              },
+              body: JSON.stringify({ session_id: sessionId }),
+            });
 
-        if (payload?.credited) {
-          toast.success("✅ Paiement réussi !", {
-            description: `Vous avez été crédité de ${Number(payload.amount).toFixed(2)} €. Nouveau solde : ${Number(payload.new_balance ?? 0).toFixed(2)} €.`,
-            duration: 6000,
-          });
-        } else if (payload?.duplicate) {
-          toast.success("Paiement déjà pris en compte.");
+            const payload = await response.json().catch(() => ({}));
+
+            if (response.ok) {
+              if (payload?.credited) {
+                toast.success("✅ Paiement réussi !", {
+                  description: `Vous avez été crédité de ${Number(payload.amount).toFixed(2)} €. Nouveau solde : ${Number(payload.new_balance ?? 0).toFixed(2)} €.`,
+                  duration: 6000,
+                });
+              } else if (payload?.duplicate) {
+                toast.success("Paiement déjà pris en compte.");
+              }
+
+              const cleanUrl = `${window.location.pathname}`;
+              window.history.replaceState({}, "", cleanUrl);
+              return;
+            }
+
+            lastError = payload?.error ?? `Erreur ${response.status}`;
+
+            if (response.status !== 409 && response.status < 500) {
+              throw new Error(lastError);
+            }
         }
 
-        const cleanUrl = `${window.location.pathname}`;
-        window.history.replaceState({}, "", cleanUrl);
+          if (attempt < STRIPE_SYNC_MAX_ATTEMPTS) {
+            await wait(STRIPE_SYNC_RETRY_MS);
+          }
+        }
+
+        throw new Error(lastError || "La synchronisation du paiement prend trop de temps.");
       } catch (err) {
         toast.error((err as Error).message ?? "Impossible de confirmer le paiement.");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     void verifyStripeReturn();
+    return () => {
+      cancelled = true;
+    };
   }, [profile?.id]);
 
   const handleCheckout = async () => {
