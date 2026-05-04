@@ -13,35 +13,57 @@ function json(body: unknown, status = 200) {
   });
 }
 
-const truncateDiscordValue = (value: unknown, fallback = "—") => {
+const truncateDiscordValue = (value: unknown, fallback = "—", maxLength = 1000) => {
   const text = String(value ?? "").trim();
   if (!text) return fallback;
-  return text.length > 1000 ? `${text.slice(0, 997)}...` : text;
+  return text.length > maxLength ? `${text.slice(0, Math.max(1, maxLength - 3))}...` : text;
 };
 
 async function sendDiscordAdminWebhook(webhookUrl: string, payload: { title: string; color: number; content: string; fields: Array<{ name: string; value: string; inline?: boolean }> }) {
-  const url = new URL(webhookUrl);
+  const url = new URL(webhookUrl.trim());
   url.searchParams.set("wait", "true");
 
-  const response = await fetch(url.toString(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  const sendPayload = async (body: Record<string, unknown>) => {
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const responseText = await response.text();
+    if (!response.ok) {
+      throw new Error(`Discord webhook ${response.status}: ${responseText || response.statusText}`);
+    }
+  };
+
+  try {
+    await sendPayload({
       username: "SlowRun Admin",
       allowed_mentions: { parse: [] },
-      content: payload.content,
+      content: truncateDiscordValue(payload.content, "—", 500),
       embeds: [{
-        title: payload.title,
+        title: truncateDiscordValue(payload.title, "Notification", 250),
         color: payload.color,
         fields: payload.fields,
         timestamp: new Date().toISOString(),
       }],
-    }),
-  });
+    });
+  } catch (embedError) {
+    const fallbackContent = truncateDiscordValue([
+      payload.title,
+      payload.content,
+      ...payload.fields.map((field) => `${truncateDiscordValue(field.name, "Champ", 80)}: ${truncateDiscordValue(field.value, "—", 220)}`),
+    ].join("\n"), "Notification admin", 1800);
 
-  const responseText = await response.text();
-  if (!response.ok) {
-    throw new Error(`Discord webhook ${response.status}: ${responseText || response.statusText}`);
+    try {
+      await sendPayload({
+        username: "SlowRun Admin",
+        allowed_mentions: { parse: [] },
+        content: fallbackContent,
+      });
+    } catch (fallbackError) {
+      throw new Error(`${(embedError as Error).message} | fallback: ${(fallbackError as Error).message}`);
+    }
   }
 }
 
@@ -135,7 +157,7 @@ Deno.serve(async (req) => {
     }
 
     // Notification Discord admin
-    const discordWebhook = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
+    const discordWebhook = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL")?.trim();
     let notificationError: string | null = null;
     if (discordWebhook) {
       try {
