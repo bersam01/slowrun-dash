@@ -419,6 +419,7 @@ Deno.serve(async (req) => {
         commission,
         site,
         event_date,
+        source_bot,
       };
 
       console.log("[bot-api] purchase insert payload:", insertPayload);
