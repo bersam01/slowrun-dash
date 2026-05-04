@@ -99,9 +99,12 @@ const Admin = () => {
   const [creditAmount, setCreditAmount] = useState<Record<string, number>>({});
   const [newProd, setNewProd] = useState({ name: "", description: "", price_eur: 0, image_url: "", stock: "" });
   const [refundForm, setRefundForm] = useState({ user_id: "", amount: "", note: "" });
+  const [shareConfig, setShareConfig] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
+  const [shareConfigDraft, setShareConfigDraft] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
+  const [sharedPurchases, setSharedPurchases] = useState<PurchaseRow[]>([]);
 
   const load = async () => {
-    const [u, c, p, pu, pr, w, rf] = await Promise.all([
+    const [u, c, p, pu, pr, w, rf, sc] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("credit_requests").select("*, profiles(display_name)").order("created_at", { ascending: false }),
       supabase.from("payments").select("*, profiles(display_name)").order("created_at", { ascending: false }).limit(50),
@@ -109,6 +112,7 @@ const Admin = () => {
       supabase.from("products").select("*").order("created_at", { ascending: false }),
       supabase.from("wallets").select("user_id, balance, total_credited, total_spent"),
       supabase.from("refunds").select("*").order("created_at", { ascending: false }).limit(100),
+      supabase.from("revenue_share_config").select("bot_name, partner_user_id, share_pct").maybeSingle(),
     ]);
     setUsers((u.data ?? []) as AdminProfile[]);
     setCredits((c.data ?? []) as CreditReq[]);
@@ -119,6 +123,21 @@ const Admin = () => {
     ((w.data ?? []) as WalletRow[]).forEach((row) => { wMap[row.user_id] = row; });
     setWallets(wMap);
     setRefunds((rf.data ?? []) as RefundRow[]);
+    const cfg = (sc.data ?? { bot_name: "", partner_user_id: "", share_pct: 50 }) as RevenueShareConfig;
+    setShareConfig(cfg);
+    setShareConfigDraft({ bot_name: cfg.bot_name ?? "", partner_user_id: cfg.partner_user_id ?? "", share_pct: cfg.share_pct ?? 50 });
+
+    // Load all purchases matching the configured bot (separate query, no limit on filter)
+    if (cfg.bot_name) {
+      const { data: sp } = await supabase
+        .from("purchases")
+        .select("*, profiles(display_name)")
+        .eq("source_bot", cfg.bot_name)
+        .order("created_at", { ascending: false });
+      setSharedPurchases((sp ?? []) as PurchaseRow[]);
+    } else {
+      setSharedPurchases([]);
+    }
   };
 
   useEffect(() => {
