@@ -88,6 +88,22 @@ interface RefundRow {
   created_at: string;
 }
 
+const normalizeBotName = (value: string | null | undefined) =>
+  String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[•·].*$/u, "")
+    .replace(/\bv?\d+(?:\.\d+)+(?:\b.*)?$/i, "")
+    .replace(/[^a-z0-9]+/gi, "")
+    .toLowerCase()
+    .trim();
+
+const matchesBotName = (sourceBot: string | null | undefined, configuredBot: string | null | undefined) => {
+  const source = normalizeBotName(sourceBot);
+  const configured = normalizeBotName(configuredBot);
+  if (!source || !configured) return false;
+  return source === configured || source.startsWith(configured) || configured.startsWith(source);
+};
+
 const Admin = () => {
   const [users, setUsers] = useState<AdminProfile[]>([]);
   const [credits, setCredits] = useState<CreditReq[]>([]);
@@ -132,9 +148,9 @@ const Admin = () => {
       const { data: sp } = await supabase
         .from("purchases")
         .select("*, profiles(display_name)")
-        .eq("source_bot", cfg.bot_name)
+        .not("source_bot", "is", null)
         .order("created_at", { ascending: false });
-      setSharedPurchases((sp ?? []) as PurchaseRow[]);
+      setSharedPurchases(((sp ?? []) as PurchaseRow[]).filter((purchase) => matchesBotName(purchase.source_bot, cfg.bot_name)));
     } else {
       setSharedPurchases([]);
     }
