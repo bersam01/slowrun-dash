@@ -50,6 +50,10 @@ interface PurchaseRow {
   created_at: string;
   commission: number | null;
   source_bot: string | null;
+  category?: string | null;
+  seats?: string[] | null;
+  site?: string | null;
+  event_date?: string | null;
   profiles?: { display_name: string | null };
 }
 
@@ -102,6 +106,28 @@ const matchesBotName = (sourceBot: string | null | undefined, configuredBot: str
   const configured = normalizeBotName(configuredBot);
   if (!source || !configured) return false;
   return source === configured || source.startsWith(configured) || configured.startsWith(source);
+};
+
+const inferPurchaseBot = (purchase: PurchaseRow) => {
+  if (purchase.source_bot) return purchase.source_bot;
+
+  const storeText = `${purchase.store ?? ""} ${purchase.site ?? ""}`.toLowerCase();
+  const categoryText = String(purchase.category ?? "").toLowerCase();
+  const seats = purchase.seats ?? [];
+  const hasIsoEventDate = /^\d{4}-\d{2}-\d{2}t\d{2}:\d{2}:\d{2}/i.test(String(purchase.event_date ?? ""));
+  const looksLikeTicketmaster =
+    storeText.includes("ticketmaster fr") ||
+    storeText.includes("ticketmaster") ||
+    storeText === "tm" ||
+    storeText.startsWith("tm ");
+  const hasCiroStylePlacement =
+    /gradin|section|tribune|pelouse|carre|carré|balcon|fosse/i.test(categoryText) || seats.length > 0;
+
+  if (looksLikeTicketmaster && hasIsoEventDate && hasCiroStylePlacement) {
+    return "CiroAIO";
+  }
+
+  return null;
 };
 
 const Admin = () => {
