@@ -372,6 +372,9 @@ Deno.serve(async (req) => {
         readField("retail_price", "retail", "retailPrice", "face_value", "price"),
       );
       const seats = parseSeats(readField("seats", "ticket_seats", "places", "seat"));
+      const source_bot = parseOptionalString(
+        readField("source_bot", "bot", "bot_id", "bot_name", "botName", "botId"),
+      );
 
       console.log("[bot-api] purchase parsed:", {
         event_name,
@@ -383,6 +386,7 @@ Deno.serve(async (req) => {
         retail_price,
         site,
         event_date,
+        source_bot,
         seats_count: seats?.length ?? 0,
       });
 
@@ -415,6 +419,7 @@ Deno.serve(async (req) => {
         commission,
         site,
         event_date,
+        source_bot,
       };
 
       console.log("[bot-api] purchase insert payload:", insertPayload);
