@@ -55,10 +55,18 @@ Deno.serve(async (req) => {
     if (reqRow.status !== "pending") return json({ error: "Demande déjà traitée" }, 400);
 
     const newStatus = approve ? "approved" : "rejected";
-    const { error: updReqErr } = await admin
+    let updReqErr = (await admin
       .from("credit_requests")
       .update({ status: newStatus, processed_at: new Date().toISOString(), processed_by: callerId })
-      .eq("id", requestId);
+      .eq("id", requestId)).error;
+    if (updReqErr) {
+      console.error("update with processed_at/by failed, retrying with status only", updReqErr);
+      const retry = await admin
+        .from("credit_requests")
+        .update({ status: newStatus })
+        .eq("id", requestId);
+      updReqErr = retry.error;
+    }
     if (updReqErr) return json({ error: updReqErr.message }, 500);
 
     if (approve) {
