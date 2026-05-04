@@ -13,6 +13,7 @@ import Dashboard from "./pages/Dashboard.tsx";
 import Credit from "./pages/Credit.tsx";
 import Products from "./pages/Products.tsx";
 import Admin from "./pages/Admin.tsx";
+import Collab from "./pages/Collab.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
 import { AuthProvider } from "./hooks/useAuth";
 
@@ -36,6 +37,7 @@ const App = () => (
           <Route path="/credit" element={<ProtectedRoute><Credit /></ProtectedRoute>} />
           <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
+          <Route path="/collab" element={<ProtectedRoute><Collab /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </AuthProvider>

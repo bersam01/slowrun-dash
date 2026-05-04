@@ -1,10 +1,11 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { Badge } from "@/components/ui/badge";
-import { LayoutDashboard, ShieldCheck, Package, LogOut, Wallet, Sparkles } from "lucide-react";
+import { LayoutDashboard, ShieldCheck, Package, LogOut, Wallet, Sparkles, Share2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
@@ -15,6 +16,20 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { profile, isAdmin, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [isPartner, setIsPartner] = useState(false);
+
+  useEffect(() => {
+    if (!profile) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.functions.invoke("partner-shared-data");
+      if (cancelled) return;
+      if (!error && data && !(data as { error?: string }).error) setIsPartner(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile]);
 
   const handleLogout = async () => {
     await signOut();
@@ -25,6 +40,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/credit", label: "Créditer", icon: Wallet },
     { to: "/products", label: "Produits", icon: Package },
+    ...(isPartner && !isAdmin ? [{ to: "/collab", label: "Collab", icon: Share2 }] : []),
     ...(isAdmin ? [{ to: "/admin", label: "Admin", icon: ShieldCheck }] : []),
   ];
 
