@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2, Calculator, Share2 } from "lucide-react";
+import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2, Calculator, Share2, History, AlertCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -78,6 +79,7 @@ interface WalletRow {
   balance: number;
   total_credited: number;
   total_spent: number;
+  overdraft_limit_eur?: number;
 }
 
 interface RefundRow {
@@ -144,6 +146,11 @@ const Admin = () => {
   const [shareConfig, setShareConfig] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
   const [shareConfigDraft, setShareConfigDraft] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
   const [sharedPurchases, setSharedPurchases] = useState<PurchaseRow[]>([]);
+  const [historyUser, setHistoryUser] = useState<AdminProfile | null>(null);
+  const [historyPurchases, setHistoryPurchases] = useState<PurchaseRow[]>([]);
+  const [historyProducts, setHistoryProducts] = useState<{ id: string; product_name: string; quantity: number; total_eur: number; status: string; created_at: string }[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [overdraftDraft, setOverdraftDraft] = useState<Record<string, string>>({});
 
   const load = async () => {
     const [u, c, p, pu, pr, w, rf, sc] = await Promise.all([
@@ -152,7 +159,7 @@ const Admin = () => {
       supabase.from("payments").select("*, profiles(display_name)").order("created_at", { ascending: false }).limit(50),
       supabase.from("purchases").select("*, profiles(display_name)").order("created_at", { ascending: false }).limit(50),
       supabase.from("products").select("*").order("created_at", { ascending: false }),
-      supabase.from("wallets").select("user_id, balance, total_credited, total_spent"),
+      supabase.from("wallets").select("user_id, balance, total_credited, total_spent, overdraft_limit_eur"),
       supabase.from("refunds").select("*").order("created_at", { ascending: false }).limit(100),
       supabase.from("revenue_share_config").select("bot_name, partner_user_id, share_pct").maybeSingle(),
     ]);
@@ -331,6 +338,45 @@ const Admin = () => {
     load();
   };
 
+  const openHistory = async (user: AdminProfile) => {
+    setHistoryUser(user);
+    setHistoryLoading(true);
+    setHistoryPurchases([]);
+    setHistoryProducts([]);
+    const [pu, pp] = await Promise.all([
+      supabase.from("purchases").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("product_purchases").select("id, product_name, quantity, total_eur, status, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
+    ]);
+    setHistoryPurchases((pu.data ?? []) as PurchaseRow[]);
+    setHistoryProducts((pp.data ?? []) as any[]);
+    setHistoryLoading(false);
+  };
+
+  const deleteHistoryItem = async (id: string, kind: "purchase" | "product", label: string) => {
+    if (!confirm(`Supprimer "${label}" et recréditer le solde ?`)) return;
+    const { data, error } = await supabase.functions.invoke("admin-delete-purchase", {
+      body: { purchase_id: id, kind, refund: true },
+    });
+    if (error) return toast.error(error.message);
+    if (data?.error) return toast.error(data.error);
+    toast.success("Supprimé et solde recrédité");
+    if (kind === "purchase") setHistoryPurchases((s) => s.filter((p) => p.id !== id));
+    else setHistoryProducts((s) => s.filter((p) => p.id !== id));
+    load();
+  };
+
+  const saveOverdraft = async (userId: string) => {
+    const raw = overdraftDraft[userId];
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) return toast.error("Valeur invalide (≥ 0)");
+    const { error } = await supabase
+      .from("wallets")
+      .upsert({ user_id: userId, overdraft_limit_eur: value, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    if (error) return toast.error(error.message);
+    toast.success(`Découvert défini à ${value.toFixed(2)} €`);
+    setOverdraftDraft((s) => ({ ...s, [userId]: "" }));
+    load();
+  };
   const pending = users.filter((u) => u.status === "pending");
   const rejectedUsers = users.filter((u) => u.status === "rejected");
   const refundPreview = (() => {
@@ -411,6 +457,9 @@ const Admin = () => {
                     <div className="mt-1 text-xs">
                       <span className="font-semibold text-primary">Solde : {Number(w?.balance ?? 0).toFixed(2)} q</span>
                       <span className="ml-2 text-muted-foreground">(crédité {Number(w?.total_credited ?? 0).toFixed(2)} • dépensé {Number(w?.total_spent ?? 0).toFixed(2)})</span>
+                      {Number(w?.overdraft_limit_eur ?? 0) > 0 && (
+                        <span className="ml-2 text-warning">• découvert {Number(w?.overdraft_limit_eur).toFixed(2)} €</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -428,6 +477,23 @@ const Admin = () => {
                   </Button>
                   <Button size="sm" variant="destructive" onClick={() => adjustCredit(u.id, -1)}>
                     <Minus className="mr-1 h-4 w-4" />Retirer
+                  </Button>
+                  <div className="flex items-center gap-1 rounded-md border border-border/60 px-2 py-1">
+                    <AlertCircle className="h-3.5 w-3.5 text-warning" />
+                    <span className="text-xs text-muted-foreground">Découvert</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder={Number(w?.overdraft_limit_eur ?? 0).toFixed(2)}
+                      value={overdraftDraft[u.id] ?? ""}
+                      onChange={(e) => setOverdraftDraft((s) => ({ ...s, [u.id]: e.target.value }))}
+                      className="h-7 w-20 text-xs"
+                    />
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => saveOverdraft(u.id)}>OK</Button>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => openHistory(u)}>
+                    <History className="mr-1 h-4 w-4" />Voir achats
                   </Button>
                   <Button size="sm" variant={u.member_tag === "MY-MY" ? "destructive" : "outline"} onClick={() => toggleMemberTag(u.id, u.member_tag)}>
                     {u.member_tag === "MY-MY" ? "Retirer MY-MY" : "+ MY-MY"}
@@ -768,6 +834,87 @@ const Admin = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={!!historyUser} onOpenChange={(o) => { if (!o) { setHistoryUser(null); setHistoryPurchases([]); setHistoryProducts([]); } }}>
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+          {historyUser && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5" /> Historique — {historyUser.display_name ?? historyUser.id.slice(0, 8)}
+                </DialogTitle>
+                <DialogDescription>
+                  Supprimer un panier de test recrédite automatiquement le solde de l'utilisateur.
+                </DialogDescription>
+              </DialogHeader>
+
+              {historyLoading && <div className="py-6 text-center text-sm text-muted-foreground">Chargement…</div>}
+
+              {!historyLoading && (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                      <ShoppingCart className="h-4 w-4" /> Paniers ({historyPurchases.length})
+                    </h3>
+                    {historyPurchases.length === 0 ? (
+                      <div className="rounded-md border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">Aucun panier.</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {historyPurchases.map((p) => (
+                          <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-secondary/20 p-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-medium">🎟️ {p.event_name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {p.store} • Qté {p.quantity} • {new Date(p.created_at).toLocaleString("fr-FR")}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold">{Number(p.price_quota).toFixed(2)} €</div>
+                              <Badge variant="secondary" className="mt-1 text-[10px]">{p.status}</Badge>
+                            </div>
+                            <Button size="sm" variant="destructive" onClick={() => deleteHistoryItem(p.id, "purchase", p.event_name)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                      <Package className="h-4 w-4" /> Produits ({historyProducts.length})
+                    </h3>
+                    {historyProducts.length === 0 ? (
+                      <div className="rounded-md border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">Aucun produit.</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {historyProducts.map((p) => (
+                          <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-secondary/20 p-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-medium">{p.product_name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                Qté {p.quantity} • {new Date(p.created_at).toLocaleString("fr-FR")}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold">{Number(p.total_eur).toFixed(2)} €</div>
+                              <Badge variant="secondary" className="mt-1 text-[10px]">{p.status}</Badge>
+                            </div>
+                            <Button size="sm" variant="destructive" onClick={() => deleteHistoryItem(p.id, "product", p.product_name)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
