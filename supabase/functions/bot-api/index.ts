@@ -494,6 +494,70 @@ Deno.serve(async (req) => {
       return json({ ok: true, new_balance });
     }
 
+    if (action === "mark_expired") {
+      // Le bot Discord notifie qu'un panier réservé n'a finalement pas été payé.
+      // On supprime le panier ET on rembourse le wallet.
+      // Identifiants acceptés (par ordre de priorité) :
+      //   - purchase_id (UUID exact)
+      //   - discord_id + event_name (+ optionnel store / created_after ISO)
+      const purchaseId = String(body?.purchase_id ?? "").trim() || null;
+      const eventName = parseOptionalString(body?.event_name, body?.event);
+      const storeName = parseOptionalString(body?.store, body?.site);
+      const createdAfter = parseOptionalString(body?.created_after, body?.since);
+
+      let target: { id: string; user_id: string; price_quota: number; event_name: string } | null = null;
+
+      if (purchaseId) {
+        const { data } = await admin
+          .from("purchases")
+          .select("id, user_id, price_quota, event_name")
+          .eq("id", purchaseId)
+          .maybeSingle();
+        target = (data as any) ?? null;
+      } else {
+        if (!discord_id) return json({ error: "purchase_id ou discord_id requis" }, 400);
+        if (!eventName) return json({ error: "event_name requis quand pas de purchase_id" }, 400);
+        const userId = (await resolveUserId()) ?? (await resolveUserIdFromAuthIdentity());
+        if (!userId) return json({ error: "Compte non trouvé pour ce discord_id" }, 404);
+
+        let q = admin
+          .from("purchases")
+          .select("id, user_id, price_quota, event_name, created_at, store")
+          .eq("user_id", userId)
+          .ilike("event_name", `%${eventName}%`)
+          .order("created_at", { ascending: false })
+          .limit(5);
+        if (createdAfter) q = q.gte("created_at", createdAfter);
+        const { data: rows } = await q;
+        const candidates = (rows ?? []) as any[];
+        const filtered = storeName
+          ? candidates.filter((r) => String(r.store ?? "").toLowerCase().includes(storeName.toLowerCase()))
+          : candidates;
+        target = filtered[0] ?? candidates[0] ?? null;
+      }
+
+      if (!target) return json({ error: "Panier introuvable" }, 404);
+
+      // Rembourser le wallet
+      const { data: wallet } = await admin
+        .from("wallets")
+        .select("balance, total_spent")
+        .eq("user_id", target.user_id)
+        .maybeSingle();
+      const newBal = +(Number(wallet?.balance ?? 0) + Number(target.price_quota)).toFixed(2);
+      const newSpent = +(Math.max(0, Number(wallet?.total_spent ?? 0) - Number(target.price_quota))).toFixed(2);
+      await admin
+        .from("wallets")
+        .update({ balance: newBal, total_spent: newSpent, updated_at: new Date().toISOString() })
+        .eq("user_id", target.user_id);
+
+      const { error: delErr } = await admin.from("purchases").delete().eq("id", target.id);
+      if (delErr) return json({ error: delErr.message }, 500);
+
+      console.log("[bot-api] mark_expired success", { purchase_id: target.id, refunded: target.price_quota });
+      return json({ ok: true, purchase_id: target.id, refunded: Number(target.price_quota), new_balance: newBal });
+    }
+
     if (action === "link_discord") {
       // Admin-only-ish: link an existing email-account to a discord_id.
       // The api-key owner can only modify their own profile here for safety.
