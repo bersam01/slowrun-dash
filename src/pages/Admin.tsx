@@ -377,6 +377,7 @@ const Admin = () => {
     setOverdraftDraft((s) => ({ ...s, [userId]: "" }));
     load();
   };
+  const pending = users.filter((u) => u.status === "pending");
   const rejectedUsers = users.filter((u) => u.status === "rejected");
   const refundPreview = (() => {
     const amount = Number(refundForm.amount);
