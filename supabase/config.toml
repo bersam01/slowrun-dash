@@ -35,3 +35,6 @@ verify_jwt = true
 
 [functions.admin-delete-purchase]
 verify_jwt = true
+
+[functions.admin-set-overdraft]
+verify_jwt = true

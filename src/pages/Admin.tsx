@@ -148,9 +148,11 @@ const Admin = () => {
   const [sharedPurchases, setSharedPurchases] = useState<PurchaseRow[]>([]);
   const [historyUser, setHistoryUser] = useState<AdminProfile | null>(null);
   const [historyPurchases, setHistoryPurchases] = useState<PurchaseRow[]>([]);
-  const [historyProducts, setHistoryProducts] = useState<{ id: string; product_name: string; quantity: number; total_eur: number; status: string; created_at: string }[]>([]);
+  const [historyProducts, setHistoryProducts] = useState<{ id: string; product_name: string; quantity: number; total_eur: number; price_eur: number; status: string; created_at: string }[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [overdraftDraft, setOverdraftDraft] = useState<Record<string, string>>({});
+  const [selectedPurchase, setSelectedPurchase] = useState<PurchaseRow | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<{ id: string; product_name: string; quantity: number; total_eur: number; price_eur: number; status: string; created_at: string } | null>(null);
 
   const load = async () => {
     const [u, c, p, pu, pr, w, rf, sc] = await Promise.all([
@@ -345,7 +347,7 @@ const Admin = () => {
     setHistoryProducts([]);
     const [pu, pp] = await Promise.all([
       supabase.from("purchases").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("product_purchases").select("id, product_name, quantity, total_eur, status, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("product_purchases").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
     ]);
     setHistoryPurchases((pu.data ?? []) as PurchaseRow[]);
     setHistoryProducts((pp.data ?? []) as any[]);
@@ -360,8 +362,13 @@ const Admin = () => {
     if (error) return toast.error(error.message);
     if (data?.error) return toast.error(data.error);
     toast.success("Supprimé et solde recrédité");
-    if (kind === "purchase") setHistoryPurchases((s) => s.filter((p) => p.id !== id));
-    else setHistoryProducts((s) => s.filter((p) => p.id !== id));
+    if (kind === "purchase") {
+      setHistoryPurchases((s) => s.filter((p) => p.id !== id));
+      setSelectedPurchase(null);
+    } else {
+      setHistoryProducts((s) => s.filter((p) => p.id !== id));
+      setSelectedProduct(null);
+    }
     load();
   };
 
@@ -369,10 +376,11 @@ const Admin = () => {
     const raw = overdraftDraft[userId];
     const value = Number(raw);
     if (!Number.isFinite(value) || value < 0) return toast.error("Valeur invalide (≥ 0)");
-    const { error } = await supabase
-      .from("wallets")
-      .upsert({ user_id: userId, overdraft_limit_eur: value, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    const { data, error } = await supabase.functions.invoke("admin-set-overdraft", {
+      body: { user_id: userId, overdraft_limit_eur: value },
+    });
     if (error) return toast.error(error.message);
+    if (data?.error) return toast.error(data.error);
     toast.success(`Découvert défini à ${value.toFixed(2)} €`);
     setOverdraftDraft((s) => ({ ...s, [userId]: "" }));
     load();
@@ -862,12 +870,16 @@ const Admin = () => {
                       <div className="space-y-2">
                         {historyPurchases.map((p) => (
                           <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-secondary/20 p-3">
-                            <div className="min-w-0 flex-1">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPurchase(p)}
+                              className="min-w-0 flex-1 text-left hover:opacity-80"
+                            >
                               <div className="truncate text-sm font-medium">🎟️ {p.event_name}</div>
                               <div className="text-xs text-muted-foreground">
                                 {p.store} • Qté {p.quantity} • {new Date(p.created_at).toLocaleString("fr-FR")}
                               </div>
-                            </div>
+                            </button>
                             <div className="text-right">
                               <div className="text-sm font-semibold">{Number(p.price_quota).toFixed(2)} €</div>
                               <Badge variant="secondary" className="mt-1 text-[10px]">{p.status}</Badge>
@@ -891,12 +903,16 @@ const Admin = () => {
                       <div className="space-y-2">
                         {historyProducts.map((p) => (
                           <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-secondary/20 p-3">
-                            <div className="min-w-0 flex-1">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedProduct(p)}
+                              className="min-w-0 flex-1 text-left hover:opacity-80"
+                            >
                               <div className="truncate text-sm font-medium">{p.product_name}</div>
                               <div className="text-xs text-muted-foreground">
                                 Qté {p.quantity} • {new Date(p.created_at).toLocaleString("fr-FR")}
                               </div>
-                            </div>
+                            </button>
                             <div className="text-right">
                               <div className="text-sm font-semibold">{Number(p.total_eur).toFixed(2)} €</div>
                               <Badge variant="secondary" className="mt-1 text-[10px]">{p.status}</Badge>
@@ -911,6 +927,113 @@ const Admin = () => {
                   </div>
                 </div>
               )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Détails panier */}
+      <Dialog open={!!selectedPurchase} onOpenChange={(o) => !o && setSelectedPurchase(null)}>
+        <DialogContent className="max-w-lg">
+          {selectedPurchase && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">🎟️ {selectedPurchase.event_name}</DialogTitle>
+                <DialogDescription>Détails du panier (vue admin).</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 text-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Événement</div>
+                    <div className="font-medium">{selectedPurchase.event_name}</div>
+                    {selectedPurchase.event_date && (
+                      <div className="text-xs text-muted-foreground">{selectedPurchase.event_date}</div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Site / Store</div>
+                    <div className="font-medium">{selectedPurchase.site ?? selectedPurchase.store}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Catégorie</div>
+                    <div className="font-medium">{selectedPurchase.category ?? "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Quantité</div>
+                    <div className="font-medium">{selectedPurchase.quantity}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Source bot</div>
+                    <div className="font-medium">{inferPurchaseBot(selectedPurchase) || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Commission (PAS) — débitée</div>
+                    <div className="font-semibold text-primary">{Number(selectedPurchase.price_quota).toFixed(2)} €</div>
+                  </div>
+                </div>
+                {selectedPurchase.seats && selectedPurchase.seats.length > 0 && (
+                  <div>
+                    <div className="mb-1 text-xs text-muted-foreground">Seats</div>
+                    <div className="space-y-1 rounded-lg border border-border/60 bg-secondary/30 p-3">
+                      {selectedPurchase.seats.map((s, i) => (
+                        <div key={i} className="text-xs font-mono">{s}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center justify-between border-t border-border/60 pt-3">
+                  <Badge variant="secondary">{selectedPurchase.status}</Badge>
+                  <span className="text-xs text-muted-foreground">{new Date(selectedPurchase.created_at).toLocaleString("fr-FR")}</span>
+                </div>
+                <div className="flex justify-end pt-2">
+                  <Button variant="destructive" onClick={() => deleteHistoryItem(selectedPurchase.id, "purchase", selectedPurchase.event_name)}>
+                    <Trash2 className="mr-1 h-4 w-4" /> Supprimer & recréditer
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Détails produit acheté */}
+      <Dialog open={!!selectedProduct} onOpenChange={(o) => !o && setSelectedProduct(null)}>
+        <DialogContent className="max-w-md">
+          {selectedProduct && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedProduct.product_name}</DialogTitle>
+                <DialogDescription>Détails de l'achat produit.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Quantité</div>
+                    <div className="font-medium">{selectedProduct.quantity}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Prix unitaire</div>
+                    <div className="font-medium">{Number(selectedProduct.price_eur ?? 0).toFixed(2)} €</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between border-t border-border/60 pt-3">
+                  <Badge variant="secondary">{selectedProduct.status}</Badge>
+                  <div className="text-right">
+                    <div className="text-xs text-muted-foreground">Total débité</div>
+                    <div className="text-lg font-bold text-primary">{Number(selectedProduct.total_eur).toFixed(2)} €</div>
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">{new Date(selectedProduct.created_at).toLocaleString("fr-FR")}</div>
+                <div className="flex justify-end pt-2">
+                  <Button variant="destructive" onClick={() => deleteHistoryItem(selectedProduct.id, "product", selectedProduct.product_name)}>
+                    <Trash2 className="mr-1 h-4 w-4" /> Supprimer & recréditer
+                  </Button>
+                </div>
+              </div>
             </>
           )}
         </DialogContent>
