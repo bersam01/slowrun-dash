@@ -159,7 +159,7 @@ const Admin = () => {
       supabase.from("payments").select("*, profiles(display_name)").order("created_at", { ascending: false }).limit(50),
       supabase.from("purchases").select("*, profiles(display_name)").order("created_at", { ascending: false }).limit(50),
       supabase.from("products").select("*").order("created_at", { ascending: false }),
-      supabase.from("wallets").select("user_id, balance, total_credited, total_spent"),
+      supabase.from("wallets").select("user_id, balance, total_credited, total_spent, overdraft_limit_eur"),
       supabase.from("refunds").select("*").order("created_at", { ascending: false }).limit(100),
       supabase.from("revenue_share_config").select("bot_name, partner_user_id, share_pct").maybeSingle(),
     ]);
