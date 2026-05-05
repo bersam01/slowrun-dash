@@ -338,7 +338,45 @@ const Admin = () => {
     load();
   };
 
-  const pending = users.filter((u) => u.status === "pending");
+  const openHistory = async (user: AdminProfile) => {
+    setHistoryUser(user);
+    setHistoryLoading(true);
+    setHistoryPurchases([]);
+    setHistoryProducts([]);
+    const [pu, pp] = await Promise.all([
+      supabase.from("purchases").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("product_purchases").select("id, product_name, quantity, total_eur, status, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
+    ]);
+    setHistoryPurchases((pu.data ?? []) as PurchaseRow[]);
+    setHistoryProducts((pp.data ?? []) as any[]);
+    setHistoryLoading(false);
+  };
+
+  const deleteHistoryItem = async (id: string, kind: "purchase" | "product", label: string) => {
+    if (!confirm(`Supprimer "${label}" et recréditer le solde ?`)) return;
+    const { data, error } = await supabase.functions.invoke("admin-delete-purchase", {
+      body: { purchase_id: id, kind, refund: true },
+    });
+    if (error) return toast.error(error.message);
+    if (data?.error) return toast.error(data.error);
+    toast.success("Supprimé et solde recrédité");
+    if (kind === "purchase") setHistoryPurchases((s) => s.filter((p) => p.id !== id));
+    else setHistoryProducts((s) => s.filter((p) => p.id !== id));
+    load();
+  };
+
+  const saveOverdraft = async (userId: string) => {
+    const raw = overdraftDraft[userId];
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) return toast.error("Valeur invalide (≥ 0)");
+    const { error } = await supabase
+      .from("wallets")
+      .upsert({ user_id: userId, overdraft_limit_eur: value, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    if (error) return toast.error(error.message);
+    toast.success(`Découvert défini à ${value.toFixed(2)} €`);
+    setOverdraftDraft((s) => ({ ...s, [userId]: "" }));
+    load();
+  };
   const rejectedUsers = users.filter((u) => u.status === "rejected");
   const refundPreview = (() => {
     const amount = Number(refundForm.amount);
