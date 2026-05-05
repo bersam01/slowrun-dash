@@ -1,1 +1,37 @@
-project_id = "auluokbvxegezwyeoxxq"
+project_id = "jisiahjqkxuctzmrsqzd"
+
+[functions.bot-api]
+verify_jwt = false
+
+[functions.create-api-key]
+verify_jwt = true
+
+[functions.stripe-checkout]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.notify-pending]
+verify_jwt = true
+
+[functions.notify-status]
+verify_jwt = true
+
+[functions.admin-credit]
+verify_jwt = true
+
+[functions.admin-process-credit]
+verify_jwt = true
+
+[functions.admin-tag-purchase-bot]
+verify_jwt = true
+
+[functions.buy-product]
+verify_jwt = true
+
+[functions.partner-shared-data]
+verify_jwt = true
+
+[functions.admin-delete-purchase]
+verify_jwt = true
