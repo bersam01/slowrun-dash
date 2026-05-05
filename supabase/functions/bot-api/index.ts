@@ -428,13 +428,15 @@ Deno.serve(async (req) => {
 
       const { data: wallet } = await admin
         .from("wallets")
-        .select("balance, total_spent")
+        .select("balance, total_spent, overdraft_limit_eur")
         .eq("user_id", userId)
         .maybeSingle();
 
       const balance = Number(wallet?.balance ?? 0);
-      if (balance < amount) {
-        return json({ error: `Solde insuffisant (${balance.toFixed(2)} q < ${amount.toFixed(2)} q)` }, 400);
+      const overdraft = Number(wallet?.overdraft_limit_eur ?? 0);
+      if (balance - amount < -overdraft) {
+        const available = +(balance + overdraft).toFixed(2);
+        return json({ error: `Solde insuffisant (${available.toFixed(2)} q dispo dont ${overdraft.toFixed(2)} de découvert, requis ${amount.toFixed(2)} q)` }, 400);
       }
 
       const insertPayload = {
