@@ -146,6 +146,11 @@ const Admin = () => {
   const [shareConfig, setShareConfig] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
   const [shareConfigDraft, setShareConfigDraft] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
   const [sharedPurchases, setSharedPurchases] = useState<PurchaseRow[]>([]);
+  const [historyUser, setHistoryUser] = useState<AdminProfile | null>(null);
+  const [historyPurchases, setHistoryPurchases] = useState<PurchaseRow[]>([]);
+  const [historyProducts, setHistoryProducts] = useState<{ id: string; product_name: string; quantity: number; total_eur: number; status: string; created_at: string }[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [overdraftDraft, setOverdraftDraft] = useState<Record<string, string>>({});
 
   const load = async () => {
     const [u, c, p, pu, pr, w, rf, sc] = await Promise.all([
