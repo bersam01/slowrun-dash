@@ -148,9 +148,11 @@ const Admin = () => {
   const [sharedPurchases, setSharedPurchases] = useState<PurchaseRow[]>([]);
   const [historyUser, setHistoryUser] = useState<AdminProfile | null>(null);
   const [historyPurchases, setHistoryPurchases] = useState<PurchaseRow[]>([]);
-  const [historyProducts, setHistoryProducts] = useState<{ id: string; product_name: string; quantity: number; total_eur: number; status: string; created_at: string }[]>([]);
+  const [historyProducts, setHistoryProducts] = useState<{ id: string; product_name: string; quantity: number; total_eur: number; price_eur: number; status: string; created_at: string }[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [overdraftDraft, setOverdraftDraft] = useState<Record<string, string>>({});
+  const [selectedPurchase, setSelectedPurchase] = useState<PurchaseRow | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<{ id: string; product_name: string; quantity: number; total_eur: number; price_eur: number; status: string; created_at: string } | null>(null);
 
   const load = async () => {
     const [u, c, p, pu, pr, w, rf, sc] = await Promise.all([
@@ -345,7 +347,7 @@ const Admin = () => {
     setHistoryProducts([]);
     const [pu, pp] = await Promise.all([
       supabase.from("purchases").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("product_purchases").select("id, product_name, quantity, total_eur, status, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("product_purchases").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
     ]);
     setHistoryPurchases((pu.data ?? []) as PurchaseRow[]);
     setHistoryProducts((pp.data ?? []) as any[]);
@@ -360,8 +362,13 @@ const Admin = () => {
     if (error) return toast.error(error.message);
     if (data?.error) return toast.error(data.error);
     toast.success("Supprimé et solde recrédité");
-    if (kind === "purchase") setHistoryPurchases((s) => s.filter((p) => p.id !== id));
-    else setHistoryProducts((s) => s.filter((p) => p.id !== id));
+    if (kind === "purchase") {
+      setHistoryPurchases((s) => s.filter((p) => p.id !== id));
+      setSelectedPurchase(null);
+    } else {
+      setHistoryProducts((s) => s.filter((p) => p.id !== id));
+      setSelectedProduct(null);
+    }
     load();
   };
 
@@ -369,10 +376,11 @@ const Admin = () => {
     const raw = overdraftDraft[userId];
     const value = Number(raw);
     if (!Number.isFinite(value) || value < 0) return toast.error("Valeur invalide (≥ 0)");
-    const { error } = await supabase
-      .from("wallets")
-      .upsert({ user_id: userId, overdraft_limit_eur: value, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    const { data, error } = await supabase.functions.invoke("admin-set-overdraft", {
+      body: { user_id: userId, overdraft_limit_eur: value },
+    });
     if (error) return toast.error(error.message);
+    if (data?.error) return toast.error(data.error);
     toast.success(`Découvert défini à ${value.toFixed(2)} €`);
     setOverdraftDraft((s) => ({ ...s, [userId]: "" }));
     load();
