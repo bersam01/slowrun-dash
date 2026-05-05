@@ -376,7 +376,7 @@ const Admin = () => {
     const raw = overdraftDraft[userId];
     const value = Number(raw);
     if (!Number.isFinite(value) || value < 0) return toast.error("Valeur invalide (≥ 0)");
-    const { data, error } = await supabase.functions.invoke("admin-set-overdraft", {
+    const { data, error } = await supabase.functions.invoke("super-api", {
       body: { user_id: userId, overdraft_limit_eur: value },
     });
     if (error) return toast.error(error.message);
