@@ -38,3 +38,6 @@ verify_jwt = true
 
 [functions.admin-set-overdraft]
 verify_jwt = true
+
+[functions.super-api]
+verify_jwt = true
