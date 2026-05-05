@@ -79,6 +79,7 @@ interface WalletRow {
   balance: number;
   total_credited: number;
   total_spent: number;
+  overdraft_limit_eur?: number;
 }
 
 interface RefundRow {
