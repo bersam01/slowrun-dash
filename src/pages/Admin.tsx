@@ -870,12 +870,16 @@ const Admin = () => {
                       <div className="space-y-2">
                         {historyPurchases.map((p) => (
                           <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-secondary/20 p-3">
-                            <div className="min-w-0 flex-1">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPurchase(p)}
+                              className="min-w-0 flex-1 text-left hover:opacity-80"
+                            >
                               <div className="truncate text-sm font-medium">🎟️ {p.event_name}</div>
                               <div className="text-xs text-muted-foreground">
                                 {p.store} • Qté {p.quantity} • {new Date(p.created_at).toLocaleString("fr-FR")}
                               </div>
-                            </div>
+                            </button>
                             <div className="text-right">
                               <div className="text-sm font-semibold">{Number(p.price_quota).toFixed(2)} €</div>
                               <Badge variant="secondary" className="mt-1 text-[10px]">{p.status}</Badge>
@@ -899,12 +903,16 @@ const Admin = () => {
                       <div className="space-y-2">
                         {historyProducts.map((p) => (
                           <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-secondary/20 p-3">
-                            <div className="min-w-0 flex-1">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedProduct(p)}
+                              className="min-w-0 flex-1 text-left hover:opacity-80"
+                            >
                               <div className="truncate text-sm font-medium">{p.product_name}</div>
                               <div className="text-xs text-muted-foreground">
                                 Qté {p.quantity} • {new Date(p.created_at).toLocaleString("fr-FR")}
                               </div>
-                            </div>
+                            </button>
                             <div className="text-right">
                               <div className="text-sm font-semibold">{Number(p.total_eur).toFixed(2)} €</div>
                               <Badge variant="secondary" className="mt-1 text-[10px]">{p.status}</Badge>
