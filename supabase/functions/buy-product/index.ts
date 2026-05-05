@@ -54,11 +54,15 @@ Deno.serve(async (req) => {
     // Charger wallet
     const { data: wallet } = await admin
       .from("wallets")
-      .select("balance, total_spent")
+      .select("balance, total_spent, overdraft_limit_eur")
       .eq("user_id", userId)
       .maybeSingle();
     const balance = Number(wallet?.balance ?? 0);
-    if (balance < total) return json({ error: `Solde insuffisant (${balance.toFixed(2)} €, requis ${total.toFixed(2)} €)` }, 400);
+    const overdraft = Number(wallet?.overdraft_limit_eur ?? 0);
+    if (balance - total < -overdraft) {
+      const available = +(balance + overdraft).toFixed(2);
+      return json({ error: `Solde insuffisant (${available.toFixed(2)} € dispo, requis ${total.toFixed(2)} €)` }, 400);
+    }
 
     const newBalance = +(balance - total).toFixed(2);
     const newSpent = +(Number(wallet?.total_spent ?? 0) + total).toFixed(2);
