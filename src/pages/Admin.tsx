@@ -834,6 +834,87 @@ const Admin = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={!!historyUser} onOpenChange={(o) => { if (!o) { setHistoryUser(null); setHistoryPurchases([]); setHistoryProducts([]); } }}>
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+          {historyUser && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5" /> Historique — {historyUser.display_name ?? historyUser.id.slice(0, 8)}
+                </DialogTitle>
+                <DialogDescription>
+                  Supprimer un panier de test recrédite automatiquement le solde de l'utilisateur.
+                </DialogDescription>
+              </DialogHeader>
+
+              {historyLoading && <div className="py-6 text-center text-sm text-muted-foreground">Chargement…</div>}
+
+              {!historyLoading && (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                      <ShoppingCart className="h-4 w-4" /> Paniers ({historyPurchases.length})
+                    </h3>
+                    {historyPurchases.length === 0 ? (
+                      <div className="rounded-md border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">Aucun panier.</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {historyPurchases.map((p) => (
+                          <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-secondary/20 p-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-medium">🎟️ {p.event_name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {p.store} • Qté {p.quantity} • {new Date(p.created_at).toLocaleString("fr-FR")}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold">{Number(p.price_quota).toFixed(2)} €</div>
+                              <Badge variant="secondary" className="mt-1 text-[10px]">{p.status}</Badge>
+                            </div>
+                            <Button size="sm" variant="destructive" onClick={() => deleteHistoryItem(p.id, "purchase", p.event_name)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                      <Package className="h-4 w-4" /> Produits ({historyProducts.length})
+                    </h3>
+                    {historyProducts.length === 0 ? (
+                      <div className="rounded-md border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">Aucun produit.</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {historyProducts.map((p) => (
+                          <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-secondary/20 p-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-medium">{p.product_name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                Qté {p.quantity} • {new Date(p.created_at).toLocaleString("fr-FR")}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold">{Number(p.total_eur).toFixed(2)} €</div>
+                              <Badge variant="secondary" className="mt-1 text-[10px]">{p.status}</Badge>
+                            </div>
+                            <Button size="sm" variant="destructive" onClick={() => deleteHistoryItem(p.id, "product", p.product_name)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
