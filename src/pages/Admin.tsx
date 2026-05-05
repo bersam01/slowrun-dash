@@ -931,6 +931,113 @@ const Admin = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Détails panier */}
+      <Dialog open={!!selectedPurchase} onOpenChange={(o) => !o && setSelectedPurchase(null)}>
+        <DialogContent className="max-w-lg">
+          {selectedPurchase && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">🎟️ {selectedPurchase.event_name}</DialogTitle>
+                <DialogDescription>Détails du panier (vue admin).</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 text-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Événement</div>
+                    <div className="font-medium">{selectedPurchase.event_name}</div>
+                    {selectedPurchase.event_date && (
+                      <div className="text-xs text-muted-foreground">{selectedPurchase.event_date}</div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Site / Store</div>
+                    <div className="font-medium">{selectedPurchase.site ?? selectedPurchase.store}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Catégorie</div>
+                    <div className="font-medium">{selectedPurchase.category ?? "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Quantité</div>
+                    <div className="font-medium">{selectedPurchase.quantity}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Source bot</div>
+                    <div className="font-medium">{inferPurchaseBot(selectedPurchase) || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Commission (PAS) — débitée</div>
+                    <div className="font-semibold text-primary">{Number(selectedPurchase.price_quota).toFixed(2)} €</div>
+                  </div>
+                </div>
+                {selectedPurchase.seats && selectedPurchase.seats.length > 0 && (
+                  <div>
+                    <div className="mb-1 text-xs text-muted-foreground">Seats</div>
+                    <div className="space-y-1 rounded-lg border border-border/60 bg-secondary/30 p-3">
+                      {selectedPurchase.seats.map((s, i) => (
+                        <div key={i} className="text-xs font-mono">{s}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center justify-between border-t border-border/60 pt-3">
+                  <Badge variant="secondary">{selectedPurchase.status}</Badge>
+                  <span className="text-xs text-muted-foreground">{new Date(selectedPurchase.created_at).toLocaleString("fr-FR")}</span>
+                </div>
+                <div className="flex justify-end pt-2">
+                  <Button variant="destructive" onClick={() => deleteHistoryItem(selectedPurchase.id, "purchase", selectedPurchase.event_name)}>
+                    <Trash2 className="mr-1 h-4 w-4" /> Supprimer & recréditer
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Détails produit acheté */}
+      <Dialog open={!!selectedProduct} onOpenChange={(o) => !o && setSelectedProduct(null)}>
+        <DialogContent className="max-w-md">
+          {selectedProduct && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedProduct.product_name}</DialogTitle>
+                <DialogDescription>Détails de l'achat produit.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Quantité</div>
+                    <div className="font-medium">{selectedProduct.quantity}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Prix unitaire</div>
+                    <div className="font-medium">{Number(selectedProduct.price_eur ?? 0).toFixed(2)} €</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between border-t border-border/60 pt-3">
+                  <Badge variant="secondary">{selectedProduct.status}</Badge>
+                  <div className="text-right">
+                    <div className="text-xs text-muted-foreground">Total débité</div>
+                    <div className="text-lg font-bold text-primary">{Number(selectedProduct.total_eur).toFixed(2)} €</div>
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">{new Date(selectedProduct.created_at).toLocaleString("fr-FR")}</div>
+                <div className="flex justify-end pt-2">
+                  <Button variant="destructive" onClick={() => deleteHistoryItem(selectedProduct.id, "product", selectedProduct.product_name)}>
+                    <Trash2 className="mr-1 h-4 w-4" /> Supprimer & recréditer
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
