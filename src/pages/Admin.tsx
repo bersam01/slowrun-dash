@@ -457,6 +457,9 @@ const Admin = () => {
                     <div className="mt-1 text-xs">
                       <span className="font-semibold text-primary">Solde : {Number(w?.balance ?? 0).toFixed(2)} q</span>
                       <span className="ml-2 text-muted-foreground">(crédité {Number(w?.total_credited ?? 0).toFixed(2)} • dépensé {Number(w?.total_spent ?? 0).toFixed(2)})</span>
+                      {Number(w?.overdraft_limit_eur ?? 0) > 0 && (
+                        <span className="ml-2 text-warning">• découvert {Number(w?.overdraft_limit_eur).toFixed(2)} €</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -474,6 +477,23 @@ const Admin = () => {
                   </Button>
                   <Button size="sm" variant="destructive" onClick={() => adjustCredit(u.id, -1)}>
                     <Minus className="mr-1 h-4 w-4" />Retirer
+                  </Button>
+                  <div className="flex items-center gap-1 rounded-md border border-border/60 px-2 py-1">
+                    <AlertCircle className="h-3.5 w-3.5 text-warning" />
+                    <span className="text-xs text-muted-foreground">Découvert</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder={Number(w?.overdraft_limit_eur ?? 0).toFixed(2)}
+                      value={overdraftDraft[u.id] ?? ""}
+                      onChange={(e) => setOverdraftDraft((s) => ({ ...s, [u.id]: e.target.value }))}
+                      className="h-7 w-20 text-xs"
+                    />
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => saveOverdraft(u.id)}>OK</Button>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => openHistory(u)}>
+                    <History className="mr-1 h-4 w-4" />Voir achats
                   </Button>
                   <Button size="sm" variant={u.member_tag === "MY-MY" ? "destructive" : "outline"} onClick={() => toggleMemberTag(u.id, u.member_tag)}>
                     {u.member_tag === "MY-MY" ? "Retirer MY-MY" : "+ MY-MY"}
