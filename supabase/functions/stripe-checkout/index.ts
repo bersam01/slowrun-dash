@@ -13,6 +13,23 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+const CANONICAL_ORIGIN = "https://slowrun.app";
+
+function getCheckoutOrigin(req: Request) {
+  const origin = req.headers.get("origin")?.trim();
+  if (!origin) return CANONICAL_ORIGIN;
+
+  try {
+    const url = new URL(origin);
+    if (url.hostname === "slowrun.app" || url.hostname === "www.slowrun.app" || url.hostname === "dashboard.slowrun.app") {
+      return CANONICAL_ORIGIN;
+    }
+    return origin;
+  } catch {
+    return CANONICAL_ORIGIN;
+  }
+}
+
 async function notifyDiscordTopup(admin: ReturnType<typeof createClient>, userId: string, amount: number, newBalance: number, sessionId: string) {
   const discordWebhook = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
   if (!discordWebhook) return;
@@ -230,7 +247,7 @@ Deno.serve(async (req) => {
       return json({ error: "Montant invalide (5-5000 €)" }, 400);
     }
 
-    const origin = req.headers.get("origin") ?? "https://slowrun-dash.lovable.app";
+    const origin = getCheckoutOrigin(req);
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
