@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Wallet, ShoppingCart, CheckCircle2, Plus, Search, ExternalLink, TrendingUp, Package } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/lib/supabase";
+import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "@/lib/supabase";
 import { Link } from "react-router-dom";
 
 interface Purchase {
@@ -65,12 +65,12 @@ const Dashboard = () => {
         const accessToken = sessionData.session?.access_token;
 
         if (accessToken) {
-          await fetch(`${import.meta.env.VITE_SUPABASE_URL ?? "https://jisiahjqkxuctzmrsqzd.supabase.co"}/functions/v1/stripe-checkout`, {
+          await fetch(`${SUPABASE_FUNCTIONS_URL}/stripe-checkout`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${accessToken}`,
-              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "sb_publishable_0dgR1Ed5bYz8mx6cGapjqw_le7V33t2",
+              apikey: SUPABASE_ANON_KEY,
             },
             body: JSON.stringify({ reconcile: true }),
           });
