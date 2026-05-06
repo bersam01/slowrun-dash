@@ -506,6 +506,19 @@ const Admin = () => {
                   <Button size="sm" variant={u.member_tag === "MY-MY" ? "destructive" : "outline"} onClick={() => toggleMemberTag(u.id, u.member_tag)}>
                     {u.member_tag === "MY-MY" ? "Retirer MY-MY" : "+ MY-MY"}
                   </Button>
+                  {!u.is_admin && u.status === "approved" && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        if (confirm(`Retirer l'accès au dashboard pour ${u.display_name ?? "cet utilisateur"} ? Son compte repassera en "refusé".`)) {
+                          setStatus(u.id, "rejected");
+                        }
+                      }}
+                    >
+                      <X className="mr-1 h-4 w-4" />Retirer l'accès
+                    </Button>
+                  )}
                 </div>
               </div>
               );
