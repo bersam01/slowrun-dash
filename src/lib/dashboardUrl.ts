@@ -8,7 +8,7 @@ const SITE_HOST = "slowrun.app";
 const getHost = () =>
   typeof window !== "undefined" ? window.location.hostname : "";
 
-export const isOnDashboardHost = () => getHost() === DASHBOARD_HOST;
+export const isOnDashboardHost = () => getHost() === LEGACY_DASHBOARD_HOST;
 export const isOnSiteHost = () =>
   getHost() === SITE_HOST || getHost() === `www.${SITE_HOST}`;
 
