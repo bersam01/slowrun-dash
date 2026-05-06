@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CreditCard, Sparkles, Info } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
+import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 
 const PRESETS = [10, 25, 50, 100, 250, 500];
@@ -31,12 +31,12 @@ const Credit = () => {
         const accessToken = sessionData.session?.access_token;
         if (!accessToken) return;
 
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL ?? "https://jisiahjqkxuctzmrsqzd.supabase.co"}/functions/v1/stripe-checkout`, {
+        const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/stripe-checkout`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${accessToken}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "sb_publishable_0dgR1Ed5bYz8mx6cGapjqw_le7V33t2",
+            apikey: SUPABASE_ANON_KEY,
           },
           body: JSON.stringify({ reconcile: true }),
         });
@@ -83,12 +83,12 @@ const Credit = () => {
           if (!accessToken) {
             lastError = "Session expirée";
           } else {
-            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL ?? "https://jisiahjqkxuctzmrsqzd.supabase.co"}/functions/v1/stripe-checkout`, {
+            const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/stripe-checkout`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${accessToken}`,
-                apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "sb_publishable_0dgR1Ed5bYz8mx6cGapjqw_le7V33t2",
+                apikey: SUPABASE_ANON_KEY,
               },
               body: JSON.stringify({ session_id: sessionId }),
             });
@@ -152,12 +152,12 @@ const Credit = () => {
         return;
       }
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL ?? "https://jisiahjqkxuctzmrsqzd.supabase.co"}/functions/v1/stripe-checkout`, {
+      const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/stripe-checkout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "sb_publishable_0dgR1Ed5bYz8mx6cGapjqw_le7V33t2",
+          apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ amount }),
       });
