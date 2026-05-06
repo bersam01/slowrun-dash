@@ -159,11 +159,14 @@ Deno.serve(async (req) => {
     });
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: claimsErr } = await supabase.auth.getClaims(token);
-    if (claimsErr || !claims?.claims?.sub) return json({ error: "Unauthorized" }, 401);
+    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+    if (userErr || !userData?.user?.id) {
+      console.error("stripe-checkout auth failed", userErr);
+      return json({ error: "Unauthorized" }, 401);
+    }
 
-    const userId = claims.claims.sub as string;
-    const userEmail = (claims.claims.email as string) ?? undefined;
+    const userId = userData.user.id;
+    const userEmail = userData.user.email ?? undefined;
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
     const sessionId = typeof body?.session_id === "string" ? body.session_id.trim() : "";
     const shouldReconcile = body?.reconcile === true;
