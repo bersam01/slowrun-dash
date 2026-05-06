@@ -1,22 +1,22 @@
-// Le site marketing/login vit sur slowrun.org.
-// Une fois connecté, l'utilisateur est envoyé sur dashboard.slowrun.org.
-// En dev/preview (lovable.app, localhost…), tout reste sur le même origin.
+// Domaine public canonique de SlowRun.
+// On tolère encore l'ancien sous-domaine dashboard.slowrun.app
+// mais toutes les redirections prod doivent maintenant pointer vers slowrun.app.
 
-const DASHBOARD_HOST = "dashboard.slowrun.app";
+const LEGACY_DASHBOARD_HOST = "dashboard.slowrun.app";
 const SITE_HOST = "slowrun.app";
 
 const getHost = () =>
   typeof window !== "undefined" ? window.location.hostname : "";
 
-export const isOnDashboardHost = () => getHost() === DASHBOARD_HOST;
+export const isOnDashboardHost = () => getHost() === LEGACY_DASHBOARD_HOST;
 export const isOnSiteHost = () =>
   getHost() === SITE_HOST || getHost() === `www.${SITE_HOST}`;
 
-const usesProdDomains = () => isOnDashboardHost() || isOnSiteHost();
+const usesProdDomains = () => getHost() === LEGACY_DASHBOARD_HOST || isOnSiteHost();
 
 export const getDashboardUrl = (path: string = "/dashboard") => {
   if (usesProdDomains()) {
-    return `https://${DASHBOARD_HOST}${path === "/dashboard" ? "/" : path}`;
+    return `https://${SITE_HOST}${path === "/dashboard" ? "/dashboard" : path}`;
   }
   return path;
 };
