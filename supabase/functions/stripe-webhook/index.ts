@@ -124,8 +124,8 @@ Deno.serve(async (req) => {
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const supabaseUrl = Deno.env.get("PROD_SUPABASE_URL") ?? Deno.env.get("SUPABASE_URL");
+  const serviceRole = Deno.env.get("PROD_SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!stripeKey || !webhookSecret || !supabaseUrl || !serviceRole) {
     console.error("Missing env vars");
     return new Response("Missing config", { status: 500 });
