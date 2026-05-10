@@ -68,7 +68,7 @@ async function applyStripeCredit(admin: ReturnType<typeof createClient>, userId:
   const { data: existingPayment } = await admin
     .from("payments")
     .select("id, status")
-    .eq("provider_ref", sessionId)
+    .eq("stripe_session_id", sessionId)
     .maybeSingle();
 
   if (existingPayment?.status === "paid") {
@@ -136,7 +136,7 @@ async function applyStripeCredit(admin: ReturnType<typeof createClient>, userId:
       user_id: userId,
       amount,
       provider: "stripe",
-      provider_ref: sessionId,
+      stripe_session_id: sessionId,
       status: "paid",
       note,
     });
@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
       const { data: existingPending } = await admin
         .from("payments")
         .select("id")
-        .eq("provider_ref", session.id)
+        .eq("stripe_session_id", session.id)
         .maybeSingle();
 
       if (!existingPending) {
@@ -284,7 +284,7 @@ Deno.serve(async (req) => {
           user_id: userId,
           amount: eur,
           provider: "stripe",
-          provider_ref: session.id,
+          stripe_session_id: session.id,
           status: "pending",
           note: "Stripe checkout session created",
         });

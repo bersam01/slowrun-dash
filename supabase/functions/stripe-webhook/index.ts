@@ -53,7 +53,7 @@ async function applyStripeCredit(admin: ReturnType<typeof createClient>, userId:
   const { data: existingPayment } = await admin
     .from("payments")
     .select("id, status")
-    .eq("provider_ref", sessionId)
+    .eq("stripe_session_id", sessionId)
     .maybeSingle();
 
   if (existingPayment?.status === "paid") {
@@ -108,7 +108,7 @@ async function applyStripeCredit(admin: ReturnType<typeof createClient>, userId:
       user_id: userId,
       amount,
       provider: "stripe",
-      provider_ref: sessionId,
+      stripe_session_id: sessionId,
       status: "paid",
       note,
     });
