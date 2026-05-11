@@ -64,7 +64,7 @@ async function notifyDiscordTopup(admin: ReturnType<typeof createClient>, userId
   }
 }
 
-async function applyStripeCredit(admin: ReturnType<typeof createClient>, userId: string, sessionId: string, amount: number, note: string) {
+async function applyStripeCredit(admin: ReturnType<typeof createClient>, userId: string, sessionId: string, amount: number) {
   const { data: existingPayment } = await admin
     .from("payments")
     .select("id, status")
@@ -119,28 +119,45 @@ async function applyStripeCredit(admin: ReturnType<typeof createClient>, userId:
     if (error) throw new Error(error.message);
   }
 
-  if (existingPayment?.id) {
-    const { error } = await admin
-      .from("payments")
-      .update({
+  try {
+    if (existingPayment?.id) {
+      const { error } = await admin
+        .from("payments")
+        .update({
+          user_id: userId,
+          amount,
+          provider: "stripe",
+          status: "paid",
+        })
+        .eq("id", existingPayment.id);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await admin.from("payments").insert({
         user_id: userId,
         amount,
         provider: "stripe",
+        stripe_session_id: sessionId,
         status: "paid",
-        note,
-      })
-      .eq("id", existingPayment.id);
-    if (error) throw new Error(error.message);
-  } else {
-    const { error } = await admin.from("payments").insert({
-      user_id: userId,
-      amount,
-      provider: "stripe",
-      stripe_session_id: sessionId,
-      status: "paid",
-      note,
-    });
-    if (error) throw new Error(error.message);
+      });
+      if (error) throw new Error(error.message);
+    }
+  } catch (error) {
+    if (wallet) {
+      const { error: rollbackError } = await admin
+        .from("wallets")
+        .update({
+          balance: currentBalance,
+          total_credited: totalCredited,
+          total_spent: Number(wallet.total_spent ?? 0),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", userId);
+      if (rollbackError) console.error("stripe-checkout wallet rollback failed", rollbackError);
+    } else {
+      const { error: rollbackError } = await admin.from("wallets").delete().eq("user_id", userId);
+      if (rollbackError) console.error("stripe-checkout wallet rollback failed", rollbackError);
+    }
+    throw error;
   }
 
   await notifyDiscordTopup(admin, userId, amount, newBalance, sessionId);
@@ -204,7 +221,7 @@ Deno.serve(async (req) => {
       if (!Number.isFinite(amount) || amount <= 0) return json({ error: "Montant invalide" }, 400);
 
       const admin = createClient(supabaseUrl, supabaseServiceRoleKey);
-      return json(await applyStripeCredit(admin, userId, session.id, amount, "Stripe checkout verified on return"));
+      return json(await applyStripeCredit(admin, userId, session.id, amount));
     }
 
     if (shouldReconcile) {
@@ -224,7 +241,7 @@ Deno.serve(async (req) => {
         const amount = Number(session.metadata?.amount_eur ?? ((session.amount_total ?? 0) / 100));
         if (!Number.isFinite(amount) || amount <= 0) continue;
 
-        const result = await applyStripeCredit(admin, userId, session.id, amount, "Stripe checkout reconciled automatically");
+        const result = await applyStripeCredit(admin, userId, session.id, amount);
         if (result.credited) {
           repaired.push({
             session_id: session.id,
@@ -286,7 +303,6 @@ Deno.serve(async (req) => {
           provider: "stripe",
           stripe_session_id: session.id,
           status: "pending",
-          note: "Stripe checkout session created",
         });
         if (pendingError) {
           console.error("Unable to create pending Stripe payment", pendingError);
