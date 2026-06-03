@@ -54,8 +54,30 @@ const Products = () => {
 
   useEffect(() => {
     const status = searchParams.get("status");
-    if (status === "success") {
-      toast.success("Paiement reçu ! Ton achat sera confirmé sous quelques secondes.");
+    const sessionId = searchParams.get("session_id");
+    if (status === "success" && sessionId) {
+      (async () => {
+        const tryVerify = async (attempt = 0): Promise<void> => {
+          const { data, error } = await supabase.functions.invoke("stripe-checkout", {
+            body: { session_id: sessionId },
+          });
+          if (!error && !data?.error) {
+            toast.success(
+              data?.duplicate
+                ? "Achat déjà enregistré."
+                : `✅ Achat confirmé : ${data?.product_name ?? "produit"} ×${data?.quantity ?? 1}`,
+            );
+            load();
+            return;
+          }
+          if (attempt < 3) {
+            await new Promise((r) => setTimeout(r, 1500));
+            return tryVerify(attempt + 1);
+          }
+          toast.error(data?.error ?? error?.message ?? "Vérification du paiement échouée");
+        };
+        await tryVerify();
+      })();
       searchParams.delete("status");
       searchParams.delete("session_id");
       setSearchParams(searchParams, { replace: true });
@@ -64,7 +86,8 @@ const Products = () => {
       searchParams.delete("status");
       setSearchParams(searchParams, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openBuy = (p: Product) => {
     setSelected(p);
