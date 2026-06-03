@@ -629,9 +629,15 @@ const Admin = () => {
                 <div className="flex items-center gap-3">
                   {p.image_url && <img src={p.image_url} className="h-12 w-12 rounded object-cover" alt="" />}
                   <div>
-                    <div className="font-medium">{p.name} — {Number(p.price_eur).toFixed(2)} €</div>
-                    <div className="text-xs text-muted-foreground">{p.description ?? "—"} • Stock: {p.stock ?? "∞"}</div>
+                    <div className="font-medium">
+                      {p.name} — {Number(p.price_eur).toFixed(2)} €
+                      {Number(p.bonus_credit_eur ?? 0) > 0 && (
+                        <span className="ml-2 text-xs text-primary">+{Number(p.bonus_credit_eur).toFixed(2)} € bonus</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{p.description ?? "—"} • Stock: {p.stock ?? "∞"} • Crédite {(Number(p.price_eur) + Number(p.bonus_credit_eur ?? 0)).toFixed(2)} €</div>
                   </div>
+
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
