@@ -353,8 +353,8 @@ Deno.serve(async (req) => {
 
     const eur = Number(body?.amount);
 
-    if (!Number.isFinite(eur) || eur < 5 || eur > 5000) {
-      return json({ error: "Montant invalide (5-5000 €)" }, 400);
+    if (!Number.isFinite(eur) || eur < 1 || eur > 5000) {
+      return json({ error: "Montant invalide (1-5000 €)" }, 400);
     }
 
     const origin = getCheckoutOrigin(req);
