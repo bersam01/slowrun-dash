@@ -72,7 +72,9 @@ interface ProductRow {
   image_url: string | null;
   active: boolean;
   stock: number | null;
+  bonus_credit_eur: number | null;
 }
+
 
 interface WalletRow {
   user_id: string;
