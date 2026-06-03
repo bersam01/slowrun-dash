@@ -166,10 +166,60 @@ Deno.serve(async (req) => {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const userId = session.metadata?.user_id;
+    const kind = session.metadata?.kind;
+
+    if (!userId) {
+      console.error("Invalid metadata", session.metadata);
+      return new Response("Invalid metadata", { status: 400 });
+    }
+
+    // Achat produit Stripe direct
+    if (kind === "product") {
+      const productId = session.metadata?.product_id;
+      const productName = session.metadata?.product_name ?? "Produit";
+      const quantity = Math.max(1, Number(session.metadata?.quantity ?? 1) | 0);
+      const unitPrice = Number(session.metadata?.unit_price_eur ?? 0);
+      const total = +(unitPrice * quantity).toFixed(2);
+
+      if (!productId) return new Response("Missing product", { status: 400 });
+
+      const { data: existing } = await admin
+        .from("product_purchases")
+        .select("id")
+        .eq("stripe_session_id", session.id)
+        .maybeSingle();
+      if (existing) {
+        return new Response(JSON.stringify({ received: true, duplicate: true }), { headers: jsonHeaders });
+      }
+
+      const { error: insErr } = await admin.from("product_purchases").insert({
+        user_id: userId,
+        product_id: productId,
+        product_name: productName,
+        price_eur: unitPrice,
+        quantity,
+        total_eur: total,
+        status: "paid",
+        stripe_session_id: session.id,
+      });
+      if (insErr) {
+        console.error("product_purchases insert failed", insErr);
+        return new Response(`Insert error: ${insErr.message}`, { status: 500 });
+      }
+
+      const { data: prod } = await admin.from("products").select("stock").eq("id", productId).maybeSingle();
+      if (prod?.stock !== null && prod?.stock !== undefined) {
+        await admin.from("products").update({ stock: Math.max(0, prod.stock - quantity) }).eq("id", productId);
+      }
+
+      console.log(`Product purchase recorded: ${productId} x${quantity} for ${userId}`);
+      return new Response(JSON.stringify({ received: true }), { headers: jsonHeaders });
+    }
+
+    // Topup wallet (par défaut)
     const amountStr = session.metadata?.amount_eur;
     const amount = Number(amountStr);
-
-    if (!userId || !Number.isFinite(amount) || amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0) {
       console.error("Invalid metadata", session.metadata);
       return new Response("Invalid metadata", { status: 400 });
     }
