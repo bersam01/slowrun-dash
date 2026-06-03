@@ -138,8 +138,8 @@ const Credit = () => {
 
   const handleCheckout = async () => {
     if (!profile) return;
-    if (amount < 5) {
-      toast.error("Le montant minimum est de 5 €.");
+    if (amount < 1) {
+      toast.error("Le montant minimum est de 1 €.");
       return;
     }
     setLoading(true);
@@ -230,7 +230,7 @@ const Credit = () => {
             <Input
               id="custom"
               type="number"
-              min={5}
+              min={1}
               max={5000}
               value={amount}
               onChange={(e) => setAmount(Number(e.target.value))}
@@ -260,7 +260,7 @@ const Credit = () => {
             <Info className="h-5 w-5 text-primary" /> Comment ça marche ?
           </h2>
           <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
-            <li>• Choisis un montant en euros (min 5 €).</li>
+            <li>• Choisis un montant en euros (min 1 €).</li>
             <li>• Paye par carte via Stripe — le crédit est ajouté automatiquement.</li>
             <li>• Ou demande un crédit manuel et l'admin validera ton paiement (virement, etc.).</li>
             <li>• Ton solde en € est utilisable pour acheter des produits ou via le bot Discord.</li>
