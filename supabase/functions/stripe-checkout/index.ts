@@ -212,17 +212,58 @@ Deno.serve(async (req) => {
 
       const session = await stripe.checkout.sessions.retrieve(sessionId);
       const sessionUserId = session.metadata?.user_id;
-      const amount = Number(session.metadata?.amount_eur ?? ((session.amount_total ?? 0) / 100));
 
       if (!sessionUserId || sessionUserId !== userId) return json({ error: "Session de paiement invalide" }, 403);
       if (session.payment_status !== "paid" || session.status !== "complete") {
         return json({ error: "Paiement non confirmé" }, 409);
       }
-      if (!Number.isFinite(amount) || amount <= 0) return json({ error: "Montant invalide" }, 400);
 
       const admin = createClient(supabaseUrl, supabaseServiceRoleKey);
+
+      // Vérification achat produit
+      if (session.metadata?.kind === "product") {
+        const productId = session.metadata?.product_id;
+        const productName = session.metadata?.product_name ?? "Produit";
+        const quantity = Math.max(1, Number(session.metadata?.quantity ?? 1) | 0);
+        const unitPrice = Number(session.metadata?.unit_price_eur ?? 0);
+        const total = +(unitPrice * quantity).toFixed(2);
+        if (!productId) return json({ error: "Produit manquant" }, 400);
+
+        const { data: existing } = await admin
+          .from("product_purchases")
+          .select("id")
+          .eq("stripe_session_id", session.id)
+          .maybeSingle();
+        if (existing) {
+          return json({ ok: true, duplicate: true, kind: "product" });
+        }
+
+        const { error: insErr } = await admin.from("product_purchases").insert({
+          user_id: userId,
+          product_id: productId,
+          product_name: productName,
+          price_eur: unitPrice,
+          quantity,
+          total_eur: total,
+          status: "paid",
+          stripe_session_id: session.id,
+        });
+        if (insErr) return json({ error: insErr.message }, 500);
+
+        const { data: prod } = await admin.from("products").select("stock").eq("id", productId).maybeSingle();
+        if (prod?.stock !== null && prod?.stock !== undefined) {
+          await admin.from("products").update({ stock: Math.max(0, prod.stock - quantity) }).eq("id", productId);
+        }
+
+        return json({ ok: true, kind: "product", product_name: productName, quantity, total });
+      }
+
+      // Vérification topup wallet
+      const amount = Number(session.metadata?.amount_eur ?? ((session.amount_total ?? 0) / 100));
+      if (!Number.isFinite(amount) || amount <= 0) return json({ error: "Montant invalide" }, 400);
       return json(await applyStripeCredit(admin, userId, session.id, amount));
     }
+
 
     if (shouldReconcile) {
       if (!supabaseServiceRoleKey) return json({ error: "Missing server configuration" }, 500);
