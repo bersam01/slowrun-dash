@@ -28,7 +28,9 @@ interface Product {
   image_url: string | null;
   active: boolean;
   stock: number | null;
+  bonus_credit_eur: number | null;
 }
+
 
 const Products = () => {
   const { profile } = useAuth();
