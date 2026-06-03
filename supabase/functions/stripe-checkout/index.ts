@@ -259,7 +259,59 @@ Deno.serve(async (req) => {
       });
     }
 
+    // === Branche: achat produit (checkout Stripe direct) ===
+    const productId = typeof body?.product_id === "string" ? body.product_id.trim() : "";
+    if (productId) {
+      if (!supabaseServiceRoleKey) return json({ error: "Missing server configuration" }, 500);
+      const quantity = Math.max(1, Math.min(100, Number(body?.quantity ?? 1) | 0));
+
+      const admin = createClient(supabaseUrl, supabaseServiceRoleKey);
+      const { data: product } = await admin
+        .from("products")
+        .select("id, name, description, price_eur, active, stock, image_url")
+        .eq("id", productId)
+        .maybeSingle();
+      if (!product || !product.active) return json({ error: "Produit indisponible" }, 404);
+      if (product.stock !== null && product.stock !== undefined && product.stock < quantity) {
+        return json({ error: "Stock insuffisant" }, 400);
+      }
+
+      const origin = getCheckoutOrigin(req);
+      const productSession = await stripe.checkout.sessions.create({
+        mode: "payment",
+        payment_method_types: ["card"],
+        customer_email: userEmail,
+        line_items: [
+          {
+            price_data: {
+              currency: "eur",
+              product_data: {
+                name: product.name,
+                ...(product.description ? { description: product.description } : {}),
+                ...(product.image_url ? { images: [product.image_url] } : {}),
+              },
+              unit_amount: Math.round(Number(product.price_eur) * 100),
+            },
+            quantity,
+          },
+        ],
+        success_url: `${origin}/products?status=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/products?status=cancel`,
+        metadata: {
+          kind: "product",
+          user_id: userId,
+          product_id: product.id,
+          product_name: product.name,
+          quantity: String(quantity),
+          unit_price_eur: String(product.price_eur),
+        },
+      });
+
+      return json({ url: productSession.url, id: productSession.id });
+    }
+
     const eur = Number(body?.amount);
+
     if (!Number.isFinite(eur) || eur < 5 || eur > 5000) {
       return json({ error: "Montant invalide (5-5000 €)" }, 400);
     }

@@ -4,10 +4,21 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Package, Wallet } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Package } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 
 interface Product {
   id: string;
@@ -23,47 +34,70 @@ const Products = () => {
   const { profile } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [balance, setBalance] = useState(0);
-  const [buying, setBuying] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Product | null>(null);
+  const [quantity, setQuantity] = useState<number>(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const load = async () => {
     setLoading(true);
-    const [pRes, wRes] = await Promise.all([
-      supabase.from("products").select("*").eq("active", true).order("created_at", { ascending: false }),
-      profile ? supabase.from("wallets").select("balance").eq("user_id", profile.id).maybeSingle() : Promise.resolve({ data: null }),
-    ]);
-    setProducts((pRes.data ?? []) as Product[]);
-    if (wRes.data) setBalance(Number(wRes.data.balance ?? 0));
+    const { data } = await supabase
+      .from("products")
+      .select("*")
+      .eq("active", true)
+      .order("created_at", { ascending: false });
+    setProducts((data ?? []) as Product[]);
     setLoading(false);
   };
 
   useEffect(() => { if (profile) load(); }, [profile]);
 
-  const buy = async (id: string) => {
-    setBuying(id);
-    const { data, error } = await supabase.functions.invoke("buy-product", {
-      body: { product_id: id, quantity: 1 },
+  useEffect(() => {
+    const status = searchParams.get("status");
+    if (status === "success") {
+      toast.success("Paiement reçu ! Ton achat sera confirmé sous quelques secondes.");
+      searchParams.delete("status");
+      searchParams.delete("session_id");
+      setSearchParams(searchParams, { replace: true });
+    } else if (status === "cancel") {
+      toast.info("Paiement annulé.");
+      searchParams.delete("status");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const openBuy = (p: Product) => {
+    setSelected(p);
+    setQuantity(1);
+  };
+
+  const confirmBuy = async () => {
+    if (!selected) return;
+    const qty = Math.max(1, Math.min(100, Math.floor(quantity || 1)));
+    setSubmitting(true);
+    const { data, error } = await supabase.functions.invoke("stripe-checkout", {
+      body: { product_id: selected.id, quantity: qty },
     });
-    setBuying(null);
+    setSubmitting(false);
     if (error) return toast.error(error.message);
     if (data?.error) return toast.error(data.error);
-    toast.success("Achat effectué !");
-    load();
+    if (data?.url) {
+      window.location.href = data.url as string;
+    } else {
+      toast.error("Impossible de générer le lien de paiement.");
+    }
   };
+
+  const maxQty = selected?.stock ?? 100;
+  const total = selected ? +(Number(selected.price_eur) * Math.max(1, Math.min(maxQty, Math.floor(quantity || 1)))).toFixed(2) : 0;
 
   return (
     <DashboardLayout>
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            <span className="text-gradient-primary">Produits</span>
-          </h1>
-          <p className="mt-1 text-muted-foreground">Achète directement avec ton solde.</p>
-        </div>
-        <div className="flex items-center gap-2 rounded-full border border-border/60 bg-secondary/40 px-4 py-2">
-          <Wallet className="h-4 w-4 text-primary" />
-          <span className="font-semibold">{balance.toFixed(2)} €</span>
-        </div>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">
+          <span className="text-gradient-primary">Produits</span>
+        </h1>
+        <p className="mt-1 text-muted-foreground">Paiement sécurisé par Stripe.</p>
       </div>
 
       {loading ? (
@@ -78,7 +112,7 @@ const Products = () => {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {products.map((p) => {
-            const canBuy = balance >= Number(p.price_eur) && (p.stock === null || p.stock > 0);
+            const inStock = p.stock === null || p.stock > 0;
             return (
               <Card key={p.id} className="glass-card overflow-hidden">
                 {p.image_url && (
@@ -94,8 +128,8 @@ const Products = () => {
                   {p.description && <p className="mt-2 text-sm text-muted-foreground">{p.description}</p>}
                   <div className="mt-4 flex items-center justify-between">
                     <span className="text-2xl font-bold text-gradient-primary">{Number(p.price_eur).toFixed(2)} €</span>
-                    <Button disabled={!canBuy || buying === p.id} onClick={() => buy(p.id)}>
-                      {buying === p.id ? "..." : canBuy ? "Acheter" : (p.stock === 0 ? "Rupture" : "Solde insuffisant")}
+                    <Button disabled={!inStock} onClick={() => openBuy(p)}>
+                      {inStock ? "Acheter" : "Rupture"}
                     </Button>
                   </div>
                 </div>
@@ -104,8 +138,49 @@ const Products = () => {
           })}
         </div>
       )}
+
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{selected?.name}</DialogTitle>
+            <DialogDescription>
+              Choisis la quantité, puis tu seras redirigé vers Stripe pour le paiement.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="qty">Quantité</Label>
+              <Input
+                id="qty"
+                type="number"
+                min={1}
+                max={maxQty}
+                value={quantity}
+                onChange={(e) => setQuantity(Number(e.target.value))}
+                className="mt-1"
+              />
+              {selected?.stock !== null && selected?.stock !== undefined && (
+                <p className="mt-1 text-xs text-muted-foreground">Stock disponible : {selected.stock}</p>
+              )}
+            </div>
+            <div className="flex items-center justify-between rounded-md border border-border/60 bg-secondary/40 px-4 py-3">
+              <span className="text-sm text-muted-foreground">Total</span>
+              <span className="text-xl font-bold text-gradient-primary">{total.toFixed(2)} €</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelected(null)} disabled={submitting}>
+              Annuler
+            </Button>
+            <Button onClick={confirmBuy} disabled={submitting || quantity < 1}>
+              {submitting ? "Redirection…" : "Payer avec Stripe"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
 
 export default Products;
+
