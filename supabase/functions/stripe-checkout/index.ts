@@ -363,7 +363,9 @@ Deno.serve(async (req) => {
           product_name: product.name,
           quantity: String(quantity),
           unit_price_eur: String(product.price_eur),
+          bonus_credit_eur: String(bonusUnit),
         },
+
       });
 
       return json({ url: productSession.url, id: productSession.id });
