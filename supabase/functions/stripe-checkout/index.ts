@@ -325,13 +325,15 @@ Deno.serve(async (req) => {
       const admin = createClient(supabaseUrl, supabaseServiceRoleKey);
       const { data: product } = await admin
         .from("products")
-        .select("id, name, description, price_eur, active, stock, image_url")
+        .select("id, name, description, price_eur, active, stock, image_url, bonus_credit_eur")
         .eq("id", productId)
         .maybeSingle();
       if (!product || !product.active) return json({ error: "Produit indisponible" }, 404);
       if (product.stock !== null && product.stock !== undefined && product.stock < quantity) {
         return json({ error: "Stock insuffisant" }, 400);
       }
+      const bonusUnit = Number((product as { bonus_credit_eur?: number | null }).bonus_credit_eur ?? 0);
+
 
       const origin = getCheckoutOrigin(req);
       const productSession = await stripe.checkout.sessions.create({
