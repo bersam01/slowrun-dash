@@ -151,6 +151,12 @@ const Products = () => {
                     {p.stock !== null && <Badge variant="secondary">Stock {p.stock}</Badge>}
                   </div>
                   {p.description && <p className="mt-2 text-sm text-muted-foreground">{p.description}</p>}
+                  <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
+                    Crédite <span className="font-semibold text-primary">{(Number(p.price_eur) + Number(p.bonus_credit_eur ?? 0)).toFixed(2)} €</span> sur ton solde
+                    {Number(p.bonus_credit_eur ?? 0) > 0 && (
+                      <span className="ml-1 text-primary">(dont +{Number(p.bonus_credit_eur).toFixed(2)} € bonus 🎁)</span>
+                    )}
+                  </div>
                   <div className="mt-4 flex items-center justify-between">
                     <span className="text-2xl font-bold text-gradient-primary">{Number(p.price_eur).toFixed(2)} €</span>
                     <Button disabled={!inStock} onClick={() => openBuy(p)}>
@@ -158,6 +164,7 @@ const Products = () => {
                     </Button>
                   </div>
                 </div>
+
               </Card>
             );
           })}
