@@ -607,10 +607,15 @@ const Admin = () => {
                 <Label>Stock (vide = illimité)</Label>
                 <Input type="number" min={0} value={newProd.stock} onChange={(e) => setNewProd({ ...newProd, stock: e.target.value })} />
               </div>
+              <div>
+                <Label>Crédit bonus (€) — ajouté en + au wallet</Label>
+                <Input type="number" min={0} step="0.01" value={newProd.bonus_credit_eur} onChange={(e) => setNewProd({ ...newProd, bonus_credit_eur: e.target.value })} placeholder="0" />
+              </div>
               <div className="md:col-span-2">
                 <Label>Description</Label>
                 <Textarea value={newProd.description} onChange={(e) => setNewProd({ ...newProd, description: e.target.value })} rows={2} />
               </div>
+
             </div>
             <Button className="mt-4" onClick={createProduct}><Plus className="mr-1 h-4 w-4" />Créer le produit</Button>
           </Card>
