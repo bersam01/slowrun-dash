@@ -72,7 +72,9 @@ interface ProductRow {
   image_url: string | null;
   active: boolean;
   stock: number | null;
+  bonus_credit_eur: number | null;
 }
+
 
 interface WalletRow {
   user_id: string;
@@ -141,7 +143,7 @@ const Admin = () => {
   const [wallets, setWallets] = useState<Record<string, WalletRow>>({});
   const [refunds, setRefunds] = useState<RefundRow[]>([]);
   const [creditAmount, setCreditAmount] = useState<Record<string, number>>({});
-  const [newProd, setNewProd] = useState({ name: "", description: "", price_eur: 0, image_url: "", stock: "" });
+  const [newProd, setNewProd] = useState({ name: "", description: "", price_eur: 0, image_url: "", stock: "", bonus_credit_eur: "" });
   const [refundForm, setRefundForm] = useState({ user_id: "", amount: "", note: "" });
   const [shareConfig, setShareConfig] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
   const [shareConfigDraft, setShareConfigDraft] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
@@ -212,13 +214,15 @@ const Admin = () => {
       price_eur: newProd.price_eur,
       image_url: newProd.image_url || null,
       stock: newProd.stock === "" ? null : Number(newProd.stock),
+      bonus_credit_eur: newProd.bonus_credit_eur === "" ? 0 : Number(newProd.bonus_credit_eur),
       active: true,
     });
     if (error) return toast.error(error.message);
     toast.success("Produit créé");
-    setNewProd({ name: "", description: "", price_eur: 0, image_url: "", stock: "" });
+    setNewProd({ name: "", description: "", price_eur: 0, image_url: "", stock: "", bonus_credit_eur: "" });
     load();
   };
+
 
   const toggleProduct = async (id: string, active: boolean) => {
     const { error } = await supabase.from("products").update({ active }).eq("id", id);
@@ -603,10 +607,15 @@ const Admin = () => {
                 <Label>Stock (vide = illimité)</Label>
                 <Input type="number" min={0} value={newProd.stock} onChange={(e) => setNewProd({ ...newProd, stock: e.target.value })} />
               </div>
+              <div>
+                <Label>Crédit bonus (€) — ajouté en + au wallet</Label>
+                <Input type="number" min={0} step="0.01" value={newProd.bonus_credit_eur} onChange={(e) => setNewProd({ ...newProd, bonus_credit_eur: e.target.value })} placeholder="0" />
+              </div>
               <div className="md:col-span-2">
                 <Label>Description</Label>
                 <Textarea value={newProd.description} onChange={(e) => setNewProd({ ...newProd, description: e.target.value })} rows={2} />
               </div>
+
             </div>
             <Button className="mt-4" onClick={createProduct}><Plus className="mr-1 h-4 w-4" />Créer le produit</Button>
           </Card>
@@ -620,9 +629,15 @@ const Admin = () => {
                 <div className="flex items-center gap-3">
                   {p.image_url && <img src={p.image_url} className="h-12 w-12 rounded object-cover" alt="" />}
                   <div>
-                    <div className="font-medium">{p.name} — {Number(p.price_eur).toFixed(2)} €</div>
-                    <div className="text-xs text-muted-foreground">{p.description ?? "—"} • Stock: {p.stock ?? "∞"}</div>
+                    <div className="font-medium">
+                      {p.name} — {Number(p.price_eur).toFixed(2)} €
+                      {Number(p.bonus_credit_eur ?? 0) > 0 && (
+                        <span className="ml-2 text-xs text-primary">+{Number(p.bonus_credit_eur).toFixed(2)} € bonus</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{p.description ?? "—"} • Stock: {p.stock ?? "∞"} • Crédite {(Number(p.price_eur) + Number(p.bonus_credit_eur ?? 0)).toFixed(2)} €</div>
                   </div>
+
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">

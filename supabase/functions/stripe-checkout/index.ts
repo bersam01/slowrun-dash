@@ -220,43 +220,59 @@ Deno.serve(async (req) => {
 
       const admin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-      // Vérification achat produit
+      // Vérification achat produit (= pack de crédits stylé)
       if (session.metadata?.kind === "product") {
         const productId = session.metadata?.product_id;
         const productName = session.metadata?.product_name ?? "Produit";
         const quantity = Math.max(1, Number(session.metadata?.quantity ?? 1) | 0);
         const unitPrice = Number(session.metadata?.unit_price_eur ?? 0);
+        const bonusUnit = Number(session.metadata?.bonus_credit_eur ?? 0);
         const total = +(unitPrice * quantity).toFixed(2);
+        const creditAmount = +((unitPrice + bonusUnit) * quantity).toFixed(2);
         if (!productId) return json({ error: "Produit manquant" }, 400);
 
+        // 1) Créditer le wallet (idempotent via payments.stripe_session_id)
+        const creditResult = await applyStripeCredit(admin, userId, session.id, creditAmount);
+
+        // 2) Enregistrer l'achat produit (idempotent via product_purchases.stripe_session_id)
         const { data: existing } = await admin
           .from("product_purchases")
           .select("id")
           .eq("stripe_session_id", session.id)
           .maybeSingle();
-        if (existing) {
-          return json({ ok: true, duplicate: true, kind: "product" });
+
+        if (!existing) {
+          const { error: insErr } = await admin.from("product_purchases").insert({
+            user_id: userId,
+            product_id: productId,
+            product_name: productName,
+            price_eur: unitPrice,
+            quantity,
+            total_eur: total,
+            status: "paid",
+            stripe_session_id: session.id,
+          });
+          if (insErr) console.error("product_purchases insert failed", insErr);
+
+          const { data: prod } = await admin.from("products").select("stock").eq("id", productId).maybeSingle();
+          if (prod?.stock !== null && prod?.stock !== undefined) {
+            await admin.from("products").update({ stock: Math.max(0, prod.stock - quantity) }).eq("id", productId);
+          }
         }
 
-        const { error: insErr } = await admin.from("product_purchases").insert({
-          user_id: userId,
-          product_id: productId,
+        return json({
+          ok: true,
+          kind: "product",
           product_name: productName,
-          price_eur: unitPrice,
           quantity,
-          total_eur: total,
-          status: "paid",
-          stripe_session_id: session.id,
+          total,
+          credited: creditAmount,
+          bonus: +(bonusUnit * quantity).toFixed(2),
+          new_balance: creditResult.new_balance,
+          duplicate: !!existing,
         });
-        if (insErr) return json({ error: insErr.message }, 500);
-
-        const { data: prod } = await admin.from("products").select("stock").eq("id", productId).maybeSingle();
-        if (prod?.stock !== null && prod?.stock !== undefined) {
-          await admin.from("products").update({ stock: Math.max(0, prod.stock - quantity) }).eq("id", productId);
-        }
-
-        return json({ ok: true, kind: "product", product_name: productName, quantity, total });
       }
+
 
       // Vérification topup wallet
       const amount = Number(session.metadata?.amount_eur ?? ((session.amount_total ?? 0) / 100));
@@ -309,13 +325,15 @@ Deno.serve(async (req) => {
       const admin = createClient(supabaseUrl, supabaseServiceRoleKey);
       const { data: product } = await admin
         .from("products")
-        .select("id, name, description, price_eur, active, stock, image_url")
+        .select("id, name, description, price_eur, active, stock, image_url, bonus_credit_eur")
         .eq("id", productId)
         .maybeSingle();
       if (!product || !product.active) return json({ error: "Produit indisponible" }, 404);
       if (product.stock !== null && product.stock !== undefined && product.stock < quantity) {
         return json({ error: "Stock insuffisant" }, 400);
       }
+      const bonusUnit = Number((product as { bonus_credit_eur?: number | null }).bonus_credit_eur ?? 0);
+
 
       const origin = getCheckoutOrigin(req);
       const productSession = await stripe.checkout.sessions.create({
@@ -345,7 +363,9 @@ Deno.serve(async (req) => {
           product_name: product.name,
           quantity: String(quantity),
           unit_price_eur: String(product.price_eur),
+          bonus_credit_eur: String(bonusUnit),
         },
+
       });
 
       return json({ url: productSession.url, id: productSession.id });
