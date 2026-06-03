@@ -143,7 +143,7 @@ const Admin = () => {
   const [wallets, setWallets] = useState<Record<string, WalletRow>>({});
   const [refunds, setRefunds] = useState<RefundRow[]>([]);
   const [creditAmount, setCreditAmount] = useState<Record<string, number>>({});
-  const [newProd, setNewProd] = useState({ name: "", description: "", price_eur: 0, image_url: "", stock: "" });
+  const [newProd, setNewProd] = useState({ name: "", description: "", price_eur: 0, image_url: "", stock: "", bonus_credit_eur: "" });
   const [refundForm, setRefundForm] = useState({ user_id: "", amount: "", note: "" });
   const [shareConfig, setShareConfig] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
   const [shareConfigDraft, setShareConfigDraft] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
