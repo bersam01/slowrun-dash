@@ -214,13 +214,15 @@ const Admin = () => {
       price_eur: newProd.price_eur,
       image_url: newProd.image_url || null,
       stock: newProd.stock === "" ? null : Number(newProd.stock),
+      bonus_credit_eur: newProd.bonus_credit_eur === "" ? 0 : Number(newProd.bonus_credit_eur),
       active: true,
     });
     if (error) return toast.error(error.message);
     toast.success("Produit créé");
-    setNewProd({ name: "", description: "", price_eur: 0, image_url: "", stock: "" });
+    setNewProd({ name: "", description: "", price_eur: 0, image_url: "", stock: "", bonus_credit_eur: "" });
     load();
   };
+
 
   const toggleProduct = async (id: string, active: boolean) => {
     const { error } = await supabase.from("products").update({ active }).eq("id", id);
