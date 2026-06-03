@@ -67,8 +67,10 @@ const Products = () => {
             toast.success(
               data?.duplicate
                 ? "Achat déjà enregistré."
-                : `✅ Achat confirmé : ${data?.product_name ?? "produit"} ×${data?.quantity ?? 1}`,
+                : `✅ ${data?.product_name ?? "produit"} ×${data?.quantity ?? 1} — +${Number(data?.credited ?? 0).toFixed(2)} € crédités${Number(data?.bonus ?? 0) > 0 ? ` (dont +${Number(data.bonus).toFixed(2)} € bonus 🎁)` : ""}`,
+              { duration: 6000 },
             );
+
             load();
             return;
           }
