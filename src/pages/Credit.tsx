@@ -366,7 +366,77 @@ const Credit = () => {
               <Sparkles className="h-5 w-5" /> Demande manuelle (admin)
             </Button>
           </div>
+
+          <div className="mt-6 rounded-xl border border-border bg-secondary/20 p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Bitcoin className="h-4 w-4 text-primary" /> Payer en crypto (USDT · TRC20)
+            </div>
+
+            {!cryptoPayment ? (
+              <>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Stable, frais quasi nuls. On génère un montant unique pour identifier ton paiement, le crédit est ajouté automatiquement.
+                </p>
+                <Button
+                  onClick={handleCryptoCreate}
+                  disabled={cryptoLoading}
+                  variant="outline"
+                  size="lg"
+                  className="mt-4 w-full gap-2 h-14 text-base sm:h-11 sm:text-sm"
+                >
+                  {cryptoLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Bitcoin className="h-5 w-5" />}
+                  Générer une adresse USDT ({amount.toFixed(2)} €)
+                </Button>
+              </>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <div>
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">Montant EXACT à envoyer</Label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="flex-1 truncate rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-lg font-bold text-primary">
+                      {Number(cryptoPayment.amount_usdt).toFixed(2)} USDT
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => copyToClipboard(Number(cryptoPayment.amount_usdt).toFixed(2), "Montant")}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Adresse ({cryptoPayment.network})
+                  </Label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="flex-1 truncate rounded-lg border border-border bg-background/60 px-3 py-2 text-sm">
+                      {cryptoPayment.address}
+                    </code>
+                    <Button variant="outline" size="icon" onClick={() => copyToClipboard(cryptoPayment.address, "Adresse")}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Réseau TRON (TRC20) uniquement. Envoie le montant exact au centime près — sinon le paiement ne sera pas
+                  reconnu automatiquement. Tu seras crédité de {Number(cryptoPayment.amount_eur).toFixed(2)} € dès
+                  confirmation (~1 min). Expire à {new Date(cryptoPayment.expires_at).toLocaleTimeString("fr-FR")}.
+                </p>
+
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> En attente du paiement...
+                  <button onClick={handleCryptoCancel} className="ml-auto underline hover:text-foreground">
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </Card>
+
 
         <Card className="glass-card p-6">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
