@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2, Calculator, Share2, History, AlertCircle } from "lucide-react";
+import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2, Calculator, Share2, History, AlertCircle, Bitcoin } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -13,6 +13,16 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
+interface CryptoNetworkRow {
+  id: string;
+  label: string;
+  token_symbol: string;
+  address: string | null;
+  contract: string | null;
+  rate_eur: number;
+  enabled: boolean;
+  sort_order: number;
+}
 interface AdminProfile {
   id: string;
   display_name: string | null;
@@ -155,6 +165,28 @@ const Admin = () => {
   const [overdraftDraft, setOverdraftDraft] = useState<Record<string, string>>({});
   const [selectedPurchase, setSelectedPurchase] = useState<PurchaseRow | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<{ id: string; product_name: string; quantity: number; total_eur: number; price_eur: number; status: string; created_at: string } | null>(null);
+  const [cryptoNetworks, setCryptoNetworks] = useState<CryptoNetworkRow[]>([]);
+  const [networkDraft, setNetworkDraft] = useState<Record<string, { address?: string; contract?: string; rate_eur?: string }>>({});
+
+  const loadNetworks = async () => {
+    const { data } = await supabase
+      .from("crypto_networks")
+      .select("id, label, token_symbol, address, contract, rate_eur, enabled, sort_order")
+      .order("sort_order", { ascending: true });
+    setCryptoNetworks((data ?? []) as CryptoNetworkRow[]);
+  };
+
+  const saveNetwork = async (id: string, patch: Partial<CryptoNetworkRow>) => {
+    const { error } = await supabase
+      .from("crypto_networks")
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Réseau mis à jour");
+    loadNetworks();
+  };
+
+
 
   const load = async () => {
     const [u, c, p, pu, pr, w, rf, sc] = await Promise.all([
@@ -194,6 +226,7 @@ const Admin = () => {
 
   useEffect(() => {
     load();
+    loadNetworks();
     // Realtime subscription on wallets so balances update live
     const channel = supabase
       .channel("admin-wallets")
@@ -422,7 +455,7 @@ const Admin = () => {
       </div>
 
       <Tabs defaultValue="approvals" className="mt-8">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-8">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-9">
           <TabsTrigger value="approvals">Approbations ({pending.length})</TabsTrigger>
           <TabsTrigger value="users"><Users className="mr-1 h-4 w-4" />Utilisateurs</TabsTrigger>
           <TabsTrigger value="credits"><Wallet className="mr-1 h-4 w-4" />Crédits</TabsTrigger>
@@ -431,7 +464,82 @@ const Admin = () => {
           <TabsTrigger value="purchases"><ShoppingCart className="mr-1 h-4 w-4" />Achats</TabsTrigger>
           <TabsTrigger value="accounting"><Calculator className="mr-1 h-4 w-4" />Comptabilité</TabsTrigger>
           <TabsTrigger value="share"><Share2 className="mr-1 h-4 w-4" />Partage</TabsTrigger>
+          <TabsTrigger value="crypto"><Bitcoin className="mr-1 h-4 w-4" />Crypto</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="crypto" className="mt-4">
+          <Card className="glass-card p-6">
+            <h3 className="font-semibold">Devises crypto affichées sur la page Crédit</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Active ou désactive chaque réseau. Si aucun n'est activé, la section crypto est masquée pour les utilisateurs.
+              Si un seul est activé, il n'y a pas de sélecteur de devise.
+            </p>
+
+            {cryptoNetworks.length === 0 ? (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Aucun réseau configuré (table <code>crypto_networks</code> manquante ou vide).
+              </p>
+            ) : (
+              <div className="mt-4 space-y-4">
+                {cryptoNetworks.map((n) => (
+                  <div key={n.id} className="rounded-xl border border-border p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{n.label}</div>
+                        <div className="text-xs text-muted-foreground">{n.id} · {n.token_symbol}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs">{n.enabled ? "Affiché" : "Masqué"}</Label>
+                        <Switch checked={n.enabled} onCheckedChange={(v) => saveNetwork(n.id, { enabled: v })} />
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-3">
+                      <div>
+                        <Label className="text-xs">Adresse de réception</Label>
+                        <Input
+                          className="mt-1"
+                          value={networkDraft[n.id]?.address ?? n.address ?? ""}
+                          onChange={(e) => setNetworkDraft((p) => ({ ...p, [n.id]: { ...p[n.id], address: e.target.value } }))}
+                          placeholder={n.id === "SOL" ? "Adresse Solana" : "Adresse TRON (T...)"}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Contrat / mint du token</Label>
+                        <Input
+                          className="mt-1"
+                          value={networkDraft[n.id]?.contract ?? n.contract ?? ""}
+                          onChange={(e) => setNetworkDraft((p) => ({ ...p, [n.id]: { ...p[n.id], contract: e.target.value } }))}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Taux (1 € = X {n.token_symbol})</Label>
+                        <Input
+                          className="mt-1"
+                          type="number"
+                          step="0.01"
+                          value={networkDraft[n.id]?.rate_eur ?? String(n.rate_eur ?? "")}
+                          onChange={(e) => setNetworkDraft((p) => ({ ...p, [n.id]: { ...p[n.id], rate_eur: e.target.value } }))}
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      className="mt-3"
+                      size="sm"
+                      onClick={() => saveNetwork(n.id, {
+                        address: networkDraft[n.id]?.address ?? n.address ?? "",
+                        contract: networkDraft[n.id]?.contract ?? n.contract ?? "",
+                        rate_eur: Number(networkDraft[n.id]?.rate_eur ?? n.rate_eur) || 1.08,
+                      })}
+                    >
+                      Enregistrer
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+
 
         <TabsContent value="approvals" className="mt-4">
           <Card className="glass-card p-6">

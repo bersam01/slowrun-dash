@@ -22,6 +22,15 @@ type CryptoPayment = {
   network: string;
   status: string;
   expires_at: string;
+  token_symbol?: string;
+  label?: string;
+};
+
+type CryptoNetwork = {
+  id: string;
+  label: string;
+  token_symbol: string;
+  rate_eur: number;
 };
 
 const Credit = () => {
@@ -30,8 +39,11 @@ const Credit = () => {
   const [loading, setLoading] = useState(false);
   const [cryptoLoading, setCryptoLoading] = useState(false);
   const [cryptoPayment, setCryptoPayment] = useState<CryptoPayment | null>(null);
+  const [networks, setNetworks] = useState<CryptoNetwork[]>([]);
+  const [selectedNetwork, setSelectedNetwork] = useState<string>("");
   const cryptoPaymentRef = useRef<CryptoPayment | null>(null);
   cryptoPaymentRef.current = cryptoPayment;
+
 
   const callCrypto = useCallback(async (body: Record<string, unknown>) => {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -53,17 +65,23 @@ const Credit = () => {
     return payload;
   }, []);
 
+  const activeNetwork = networks.find((n) => n.id === selectedNetwork) ?? networks[0] ?? null;
+
   const handleCryptoCreate = async () => {
     if (amount < 1) {
       toast.error("Le montant minimum est de 1 €.");
       return;
     }
+    if (!activeNetwork) {
+      toast.error("Aucune devise crypto disponible.");
+      return;
+    }
     setCryptoLoading(true);
     try {
-      const payload = await callCrypto({ action: "create", amount });
+      const payload = await callCrypto({ action: "create", amount, network: activeNetwork.id });
       setCryptoPayment(payload.payment as CryptoPayment);
       toast.success("Adresse de paiement générée", {
-        description: "Envoie le montant EXACT en USDT (TRC20).",
+        description: `Envoie le montant EXACT en ${activeNetwork.token_symbol} (${activeNetwork.label}).`,
       });
     } catch (err) {
       toast.error((err as Error).message);
@@ -83,7 +101,25 @@ const Credit = () => {
     setCryptoPayment(null);
   };
 
-  // Polling automatique: détecte le virement USDT et crédite le solde
+  // Charge les devises crypto activées par l'admin
+  useEffect(() => {
+    if (!profile?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const payload = await callCrypto({ action: "networks" });
+        if (cancelled) return;
+        const list = (payload?.networks ?? []) as CryptoNetwork[];
+        setNetworks(list);
+        setSelectedNetwork((prev) => (list.some((n) => n.id === prev) ? prev : list[0]?.id ?? ""));
+      } catch {
+        // silencieux
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [profile?.id, callCrypto]);
+
+  // Polling automatique: détecte le virement crypto et crédite le solde
   useEffect(() => {
     if (!profile?.id) return;
 
@@ -93,6 +129,8 @@ const Credit = () => {
         const payload = await callCrypto({ action: "check" });
         if (cancelled) return;
 
+        if (Array.isArray(payload?.networks)) setNetworks(payload.networks as CryptoNetwork[]);
+
         const pending = (payload?.pending ?? null) as CryptoPayment | null;
         const current = cryptoPaymentRef.current;
 
@@ -100,7 +138,7 @@ const Credit = () => {
           setCryptoPayment(null);
           const lastPaid = payload?.last_paid;
           if (lastPaid) {
-            toast.success("🪙 Paiement USDT reçu !", {
+            toast.success("🪙 Paiement crypto reçu !", {
               description: `${Number(lastPaid.amount_eur ?? 0).toFixed(2)} € ont été ajoutés à ton solde.`,
               duration: 8000,
             });
@@ -112,6 +150,8 @@ const Credit = () => {
         // silencieux
       }
     };
+
+
 
     void tick();
     const interval = window.setInterval(tick, CRYPTO_POLL_MS);
@@ -367,9 +407,11 @@ const Credit = () => {
             </Button>
           </div>
 
+          {(networks.length > 0 || cryptoPayment) && (
           <div className="mt-6 rounded-xl border border-border bg-secondary/20 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold">
-              <Bitcoin className="h-4 w-4 text-primary" /> Payer en crypto (USDT · TRC20)
+              <Bitcoin className="h-4 w-4 text-primary" /> Payer en crypto
+              {activeNetwork && !cryptoPayment ? ` (${activeNetwork.label})` : ""}
             </div>
 
             {!cryptoPayment ? (
@@ -377,15 +419,32 @@ const Credit = () => {
                 <p className="mt-2 text-sm text-muted-foreground">
                   Stable, frais quasi nuls. On génère un montant unique pour identifier ton paiement, le crédit est ajouté automatiquement.
                 </p>
+
+                {networks.length > 1 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {networks.map((n) => (
+                      <Button
+                        key={n.id}
+                        type="button"
+                        size="sm"
+                        variant={activeNetwork?.id === n.id ? "default" : "outline"}
+                        onClick={() => setSelectedNetwork(n.id)}
+                      >
+                        {n.label}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+
                 <Button
                   onClick={handleCryptoCreate}
-                  disabled={cryptoLoading}
+                  disabled={cryptoLoading || !activeNetwork}
                   variant="outline"
                   size="lg"
                   className="mt-4 w-full gap-2 h-14 text-base sm:h-11 sm:text-sm"
                 >
                   {cryptoLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Bitcoin className="h-5 w-5" />}
-                  Générer une adresse USDT ({amount.toFixed(2)} €)
+                  Générer une adresse {activeNetwork?.token_symbol ?? "crypto"} ({amount.toFixed(2)} €)
                 </Button>
               </>
             ) : (
@@ -394,7 +453,7 @@ const Credit = () => {
                   <Label className="text-xs uppercase tracking-wide text-muted-foreground">Montant EXACT à envoyer</Label>
                   <div className="mt-1 flex items-center gap-2">
                     <code className="flex-1 truncate rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-lg font-bold text-primary">
-                      {Number(cryptoPayment.amount_usdt).toFixed(2)} USDT
+                      {Number(cryptoPayment.amount_usdt).toFixed(2)} {cryptoPayment.token_symbol ?? "USDT"}
                     </code>
                     <Button
                       variant="outline"
@@ -408,7 +467,7 @@ const Credit = () => {
 
                 <div>
                   <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Adresse ({cryptoPayment.network})
+                    Adresse ({cryptoPayment.label ?? cryptoPayment.network})
                   </Label>
                   <div className="mt-1 flex items-center gap-2">
                     <code className="flex-1 truncate rounded-lg border border-border bg-background/60 px-3 py-2 text-sm">
@@ -421,10 +480,11 @@ const Credit = () => {
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  Réseau TRON (TRC20) uniquement. Envoie le montant exact au centime près — sinon le paiement ne sera pas
-                  reconnu automatiquement. Tu seras crédité de {Number(cryptoPayment.amount_eur).toFixed(2)} € dès
+                  Réseau {cryptoPayment.label ?? cryptoPayment.network} uniquement. Envoie le montant exact au centime près — sinon le paiement ne sera
+                  pas reconnu automatiquement. Tu seras crédité de {Number(cryptoPayment.amount_eur).toFixed(2)} € dès
                   confirmation (~1 min). Expire à {new Date(cryptoPayment.expires_at).toLocaleTimeString("fr-FR")}.
                 </p>
+
 
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> En attente du paiement...
@@ -435,6 +495,8 @@ const Credit = () => {
               </div>
             )}
           </div>
+          )}
+
         </Card>
 
 
