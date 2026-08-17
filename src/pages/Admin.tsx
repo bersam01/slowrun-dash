@@ -458,7 +458,8 @@ const Admin = () => {
     const { data, error } = await supabase.functions.invoke("admin-set-overdraft", {
       body: { user_id: userId, overdraft_limit_eur: value },
     });
-    if (error || data?.error) {
+    let saved = !error && !data?.error;
+    if (!saved) {
       // Fallback direct en base (si la fonction n'est pas déployée sur ce backend)
       const { data: existing } = await supabase
         .from("wallets")
@@ -470,11 +471,22 @@ const Admin = () => {
             .from("wallets")
             .update({ overdraft_limit_eur: value, updated_at: new Date().toISOString() })
             .eq("user_id", userId)
+            .select("user_id")
         : await supabase
             .from("wallets")
-            .insert({ user_id: userId, overdraft_limit_eur: value, balance: 0, total_credited: 0, total_spent: 0 });
+            .insert({ user_id: userId, overdraft_limit_eur: value, balance: 0, total_credited: 0, total_spent: 0 })
+            .select("user_id");
       if (res.error) return toast.error(res.error.message);
+      if (!res.data || res.data.length === 0) {
+        return toast.error("Écriture refusée (droits admin manquants sur les wallets)");
+      }
+      saved = true;
     }
+    // Mise à jour optimiste immédiate de l'encoche
+    setWallets((s) => ({
+      ...s,
+      [userId]: { ...(s[userId] ?? { user_id: userId, balance: 0, total_credited: 0, total_spent: 0 }), overdraft_limit_eur: value } as WalletRow,
+    }));
     toast.success(
       value >= UNLIMITED_OVERDRAFT
         ? "Découvert illimité activé"
