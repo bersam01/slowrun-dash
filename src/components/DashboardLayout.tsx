@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { Badge } from "@/components/ui/badge";
-import { DEFAULT_ROLE_COLOR } from "@/lib/memberRoles";
+import { roleBadgeStyle } from "@/lib/memberRoles";
 import { Sparkles, LayoutDashboard, ShieldCheck, Package, LogOut, Wallet, Share2 , History} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
@@ -120,7 +120,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                   <Badge
                     variant="default"
                     className="ml-1 gap-1 border-0 px-2 py-0.5 text-[10px] uppercase tracking-wider text-white"
-                    style={{ backgroundColor: roleColor ?? DEFAULT_ROLE_COLOR }}
+                    style={roleBadgeStyle(roleColor)}
                   >
                     <Sparkles className="h-3 w-3" />
                     {profile.member_tag}
@@ -137,7 +137,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 <Badge
                   variant="default"
                   className="gap-1 border-0 px-2 py-0.5 text-[10px] uppercase tracking-wider text-white"
-                  style={{ backgroundColor: roleColor ?? DEFAULT_ROLE_COLOR }}
+                  style={roleBadgeStyle(roleColor)}
                 >
                   <Sparkles className="h-3 w-3" />
                   {profile.member_tag}
