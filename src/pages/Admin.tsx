@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
+import { CRYPTO_CATALOG } from "@/lib/cryptoCatalog";
+
 import { toast } from "sonner";
 
 interface CryptoNetworkRow {
