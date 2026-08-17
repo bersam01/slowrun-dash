@@ -217,28 +217,28 @@ const Dashboard = () => {
       <div className="grid gap-5 md:grid-cols-3">
         <StatCard
           title="Solde actuel"
-          value={isLoading ? "…" : `${balance.toFixed(2)} €`}
-          description={isLoading ? "Chargement…" : "Disponible pour achats"}
+          value={statsPending ? "…" : `${balance.toFixed(2)} €`}
+          description={statsPending ? "Chargement…" : "Disponible pour achats"}
           icon={Wallet}
           variant="primary"
         />
         <StatCard
           title="Total achats"
-          value={isLoading ? "…" : (purchases.length + productPurchases.length).toString()}
+          value={statsPending ? "…" : purchaseCount.toString()}
           description="Paniers + produits achetés."
           icon={ShoppingCart}
           variant="accent"
         />
         <StatCard
           title="Total dépensé"
-          value={isLoading ? "…" : `${totalSpent.toFixed(2)} €`}
-          description={isLoading ? "Chargement…" : `Total crédité : ${totalCredited.toFixed(2)} €`}
+          value={statsPending ? "…" : `${totalSpent.toFixed(2)} €`}
+          description={statsPending ? "Chargement…" : `Total crédité : ${totalCredited.toFixed(2)} €`}
           icon={TrendingUp}
           variant="neutral"
         />
       </div>
 
-      {!isLoading && overdraftLimit > 0 && (
+      {!statsPending && overdraftLimit > 0 && (
         <Alert className="mt-5 border-primary/30 bg-primary/10">
           <ShieldCheck className="h-4 w-4 text-primary" />
           <AlertTitle>
@@ -254,7 +254,7 @@ const Dashboard = () => {
         </Alert>
       )}
 
-      {!isLoading && balance < 0 && (
+      {!statsPending && balance < 0 && (
         <Alert variant="destructive" className="mt-5">
           <Shield className="h-4 w-4" />
           <AlertTitle>Solde négatif</AlertTitle>
