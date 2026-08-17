@@ -78,7 +78,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { to: "/credit", label: "Créditer", icon: Wallet },
     { to: "/transactions", label: "Historique", icon: History },
     { to: "/products", label: "Produits", icon: Package },
-    { to: "/vault", label: "Coffre", icon: Lock },
+    { to: "/securite", label: "Sécurité", icon: Lock },
     ...(partnerCheckDone && isPartner && !isAdmin ? [{ to: "/collab", label: "Collab", icon: Share2 }] : []),
     ...(isAdmin ? [{ to: "/admin", label: "Admin", icon: ShieldCheck }] : []),
   ];
