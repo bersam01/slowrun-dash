@@ -17,6 +17,60 @@ const EXPIRY_MINUTES = 60;
 
 type Admin = ReturnType<typeof createClient>;
 
+type Chain = "tron" | "solana" | "evm" | "utxo";
+
+type CatalogEntry = {
+  label: string;
+  token_symbol: string;
+  chain: Chain;
+  /** "native" ou adresse de contrat / mint SPL */
+  contract: string;
+  /** id CoinGecko pour le taux live */
+  coingecko: string;
+  /** décimales utilisées pour rendre le montant unique */
+  uniq: number;
+  /** groupe d'adresse : tous les réseaux d'un même groupe partagent la même adresse de réception */
+  group: "tron" | "solana" | "evm" | "btc" | "ltc" | "doge" | "bch";
+  /** chaîne EVM (chainid Etherscan v2 + instance Blockscout) */
+  evm?: { chainId: number; blockscout?: string };
+  /** chaîne UTXO Blockchair */
+  utxo?: string;
+  sort_order: number;
+};
+
+/** Catalogue des réseaux supportés (les adresses viennent du panel admin). */
+const CATALOG: Record<string, CatalogEntry> = {
+  // --- TRON ---
+  TRC20: { label: "USDT · TRON (TRC20)", token_symbol: "USDT", chain: "tron", contract: USDT_TRC20_CONTRACT, coingecko: "tether", uniq: 2, group: "tron", sort_order: 1 },
+  TRXNATIVE: { label: "TRX · TRON", token_symbol: "TRX", chain: "tron", contract: "native", coingecko: "tron", uniq: 2, group: "tron", sort_order: 2 },
+  // --- SOLANA ---
+  SOL: { label: "USDC · Solana (SPL)", token_symbol: "USDC", chain: "solana", contract: USDC_SPL_MINT, coingecko: "usd-coin", uniq: 2, group: "solana", sort_order: 3 },
+  SOLUSDT: { label: "USDT · Solana (SPL)", token_symbol: "USDT", chain: "solana", contract: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", coingecko: "tether", uniq: 2, group: "solana", sort_order: 4 },
+  SOLNATIVE: { label: "SOL · Solana", token_symbol: "SOL", chain: "solana", contract: "native", coingecko: "solana", uniq: 4, group: "solana", sort_order: 5 },
+  // --- ETHEREUM ---
+  ETH: { label: "ETH · Ethereum", token_symbol: "ETH", chain: "evm", contract: "native", coingecko: "ethereum", uniq: 5, group: "evm", evm: { chainId: 1, blockscout: "https://eth.blockscout.com" }, sort_order: 6 },
+  ETHUSDT: { label: "USDT · Ethereum (ERC20)", token_symbol: "USDT", chain: "evm", contract: "0xdac17f958d2ee523a2206206994597c13d831ec7", coingecko: "tether", uniq: 2, group: "evm", evm: { chainId: 1, blockscout: "https://eth.blockscout.com" }, sort_order: 7 },
+  ETHUSDC: { label: "USDC · Ethereum (ERC20)", token_symbol: "USDC", chain: "evm", contract: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", coingecko: "usd-coin", uniq: 2, group: "evm", evm: { chainId: 1, blockscout: "https://eth.blockscout.com" }, sort_order: 8 },
+  // --- BNB CHAIN ---
+  BNB: { label: "BNB · BNB Chain", token_symbol: "BNB", chain: "evm", contract: "native", coingecko: "binancecoin", uniq: 4, group: "evm", evm: { chainId: 56 }, sort_order: 9 },
+  BSCUSDT: { label: "USDT · BNB Chain (BEP20)", token_symbol: "USDT", chain: "evm", contract: "0x55d398326f99059ff775485246999027b3197955", coingecko: "tether", uniq: 2, group: "evm", evm: { chainId: 56 }, sort_order: 10 },
+  // --- BASE ---
+  BASEETH: { label: "ETH · Base", token_symbol: "ETH", chain: "evm", contract: "native", coingecko: "ethereum", uniq: 5, group: "evm", evm: { chainId: 8453, blockscout: "https://base.blockscout.com" }, sort_order: 11 },
+  BASEUSDC: { label: "USDC · Base", token_symbol: "USDC", chain: "evm", contract: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", coingecko: "usd-coin", uniq: 2, group: "evm", evm: { chainId: 8453, blockscout: "https://base.blockscout.com" }, sort_order: 12 },
+  // --- ARBITRUM / OPTIMISM / POLYGON / AVALANCHE ---
+  ARBETH: { label: "ETH · Arbitrum", token_symbol: "ETH", chain: "evm", contract: "native", coingecko: "ethereum", uniq: 5, group: "evm", evm: { chainId: 42161, blockscout: "https://arbitrum.blockscout.com" }, sort_order: 13 },
+  ARBUSDT: { label: "USDT · Arbitrum", token_symbol: "USDT", chain: "evm", contract: "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", coingecko: "tether", uniq: 2, group: "evm", evm: { chainId: 42161, blockscout: "https://arbitrum.blockscout.com" }, sort_order: 14 },
+  OPETH: { label: "ETH · Optimism", token_symbol: "ETH", chain: "evm", contract: "native", coingecko: "ethereum", uniq: 5, group: "evm", evm: { chainId: 10, blockscout: "https://optimism.blockscout.com" }, sort_order: 15 },
+  POLNATIVE: { label: "POL · Polygon", token_symbol: "POL", chain: "evm", contract: "native", coingecko: "matic-network", uniq: 3, group: "evm", evm: { chainId: 137, blockscout: "https://polygon.blockscout.com" }, sort_order: 16 },
+  POLUSDT: { label: "USDT · Polygon", token_symbol: "USDT", chain: "evm", contract: "0xc2132d05d31c914a87c6611c10748aeb04b58e8f", coingecko: "tether", uniq: 2, group: "evm", evm: { chainId: 137, blockscout: "https://polygon.blockscout.com" }, sort_order: 17 },
+  AVAX: { label: "AVAX · Avalanche C-Chain", token_symbol: "AVAX", chain: "evm", contract: "native", coingecko: "avalanche-2", uniq: 4, group: "evm", evm: { chainId: 43114 }, sort_order: 18 },
+  // --- UTXO ---
+  BTC: { label: "BTC · Bitcoin", token_symbol: "BTC", chain: "utxo", contract: "native", coingecko: "bitcoin", uniq: 6, group: "btc", utxo: "bitcoin", sort_order: 19 },
+  LTC: { label: "LTC · Litecoin", token_symbol: "LTC", chain: "utxo", contract: "native", coingecko: "litecoin", uniq: 4, group: "ltc", utxo: "litecoin", sort_order: 20 },
+  DOGE: { label: "DOGE · Dogecoin", token_symbol: "DOGE", chain: "utxo", contract: "native", coingecko: "dogecoin", uniq: 2, group: "doge", utxo: "dogecoin", sort_order: 21 },
+  BCH: { label: "BCH · Bitcoin Cash", token_symbol: "BCH", chain: "utxo", contract: "native", coingecko: "bitcoin-cash", uniq: 5, group: "bch", utxo: "bitcoin-cash", sort_order: 22 },
+};
+
 type NetworkConfig = {
   id: string;
   label: string;
@@ -26,83 +80,93 @@ type NetworkConfig = {
   rate_eur: number;
   enabled: boolean;
   sort_order: number;
+  meta: CatalogEntry;
 };
 
-/** true si le réseau reçoit la crypto native (SOL) et non un token. */
-const isNative = (n: { id: string; contract?: string | null }) =>
-  String(n.contract ?? "").trim().toLowerCase() === "native" || n.id === "SOLNATIVE";
+/** true si le réseau reçoit la crypto native (SOL, ETH, BTC…) et non un token. */
+const isNative = (n: { contract?: string | null }) =>
+  String(n.contract ?? "").trim().toLowerCase() === "native";
 
 /** décimales utilisées pour rendre le montant unique (matching). */
-const tokenDecimals = (n: NetworkConfig) => (isNative(n) ? 4 : 2);
-
+const tokenDecimals = (n: NetworkConfig) => n.meta?.uniq ?? (isNative(n) ? 4 : 2);
 
 type Transfer = { tx_hash: string; amount: number; timestamp: number };
 
-/** Config des réseaux : table crypto_networks si dispo, sinon fallback env (TRON). */
+const envAddress = (group: CatalogEntry["group"]) => {
+  const keys: Record<string, string[]> = {
+    tron: ["TRON_USDT_ADDRESS", "TRON_ADDRESS"],
+    solana: ["SOLANA_ADDRESS"],
+    evm: ["EVM_ADDRESS", "ETH_ADDRESS"],
+    btc: ["BTC_ADDRESS"],
+    ltc: ["LTC_ADDRESS"],
+    doge: ["DOGE_ADDRESS"],
+    bch: ["BCH_ADDRESS"],
+  };
+  for (const key of keys[group] ?? []) {
+    const v = (Deno.env.get(key) ?? "").trim();
+    if (v) return v;
+  }
+  return "";
+};
+
+/** Config des réseaux : table crypto_networks (panel admin) + catalogue intégré. */
 async function loadNetworks(admin: Admin): Promise<NetworkConfig[]> {
-  const { data, error } = await admin
+  const { data } = await admin
     .from("crypto_networks")
     .select("id, label, token_symbol, address, contract, rate_eur, enabled, sort_order")
     .order("sort_order", { ascending: true });
 
-  if (!error && data?.length) {
-    return (data as NetworkConfig[]).map((n) => ({
-      ...n,
-      address: String(n.address ?? "").trim() ||
-        (n.id === "TRC20"
-          ? (Deno.env.get("TRON_USDT_ADDRESS") ?? "").trim()
-          : (Deno.env.get("SOLANA_ADDRESS") ?? "").trim()),
-      contract: isNative(n)
-        ? "native"
-        : String(n.contract ?? "").trim() || (n.id === "TRC20" ? USDT_TRC20_CONTRACT : USDC_SPL_MINT),
-      rate_eur: Number(n.rate_eur) > 0 ? Number(n.rate_eur) : 0,
-    }));
+  const rows = (data ?? []) as Array<Partial<NetworkConfig> & { id: string }>;
+  const byId = new Map(rows.map((r) => [String(r.id), r]));
+
+  // adresses saisies dans l'admin, partagées par groupe (une adresse EVM sert à toutes les chaînes EVM)
+  const groupAddress = new Map<string, string>();
+  for (const row of rows) {
+    const meta = CATALOG[String(row.id)];
+    const addr = String(row.address ?? "").trim();
+    if (meta && addr && !groupAddress.has(meta.group)) groupAddress.set(meta.group, addr);
   }
 
-  const fallbackRate = Number(Deno.env.get("CRYPTO_EUR_USDT_RATE") ?? "1.08");
-  const tronAddress = (Deno.env.get("TRON_USDT_ADDRESS") ?? "").trim();
-  const solAddress = (Deno.env.get("SOLANA_ADDRESS") ?? "").trim();
-  return [
-    {
-      id: "TRC20",
-      label: "USDT · TRON (TRC20)",
-      token_symbol: "USDT",
-      address: tronAddress,
-      contract: USDT_TRC20_CONTRACT,
-      rate_eur: Number.isFinite(fallbackRate) && fallbackRate > 0 ? fallbackRate : 1.08,
-      enabled: Boolean(tronAddress),
-      sort_order: 1,
-    },
-    {
-      id: "SOL",
-      label: "USDC · Solana (SPL)",
-      token_symbol: "USDC",
-      address: solAddress,
-      contract: USDC_SPL_MINT,
-      rate_eur: Number.isFinite(fallbackRate) && fallbackRate > 0 ? fallbackRate : 1.08,
-      enabled: Boolean(solAddress),
-      sort_order: 2,
-    },
-    {
-      id: "SOLNATIVE",
-      label: "SOL · Solana",
-      token_symbol: "SOL",
-      address: solAddress,
-      contract: "native",
-      rate_eur: 0, // 0 = taux live (prix du SOL)
-      enabled: Boolean(solAddress),
-      sort_order: 3,
-    },
-  ];
+  const ids = new Set<string>([...Object.keys(CATALOG), ...byId.keys()]);
+
+  return [...ids]
+    .map((id) => {
+      const meta: CatalogEntry = CATALOG[id] ?? {
+        label: id,
+        token_symbol: "USDT",
+        chain: "tron",
+        contract: USDT_TRC20_CONTRACT,
+        coingecko: "tether",
+        uniq: 2,
+        group: "tron",
+        sort_order: 99,
+      };
+      const row = byId.get(id);
+      const address =
+        String(row?.address ?? "").trim() || groupAddress.get(meta.group) || envAddress(meta.group);
+      const contract = meta.contract === "native"
+        ? "native"
+        : String(row?.contract ?? "").trim() || meta.contract;
+
+      return {
+        id,
+        label: String(row?.label ?? meta.label),
+        token_symbol: String(row?.token_symbol ?? meta.token_symbol),
+        address,
+        contract,
+        rate_eur: Number(row?.rate_eur) > 0 ? Number(row?.rate_eur) : 0,
+        enabled: row ? Boolean(row.enabled) : false,
+        sort_order: Number(row?.sort_order ?? meta.sort_order),
+        meta,
+      } as NetworkConfig;
+    })
+    .sort((a, b) => a.sort_order - b.sort_order);
 }
 
-/** Prix live d'un token natif (EUR) -> nombre de tokens pour 1 €. */
+/** Taux (nombre de tokens pour 1 €). Taux fixe possible pour les stablecoins. */
 async function liveRateEur(network: NetworkConfig): Promise<number> {
-  // Pour un token natif (SOL/TRX) on ignore toujours le taux fixe stocké:
-  // le prix bouge, on prend le live. Le taux fixe ne sert qu'aux stablecoins.
   if (!isNative(network) && Number(network.rate_eur) > 0) return Number(network.rate_eur);
-  const ids: Record<string, string> = { SOLNATIVE: "solana", TRXNATIVE: "tron" };
-  const coin = ids[network.id] ?? "solana";
+  const coin = network.meta?.coingecko ?? "tether";
   const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin}&vs_currencies=eur`);
   if (!res.ok) throw new Error(`Prix indisponible (${res.status})`);
   const payload = await res.json();
