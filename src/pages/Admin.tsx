@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/lib/supabase";
+import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "@/lib/supabase";
 import { CRYPTO_CATALOG } from "@/lib/cryptoCatalog";
 
 import { toast } from "sonner";
@@ -455,32 +455,28 @@ const Admin = () => {
   };
 
   const applyOverdraft = async (userId: string, value: number) => {
-    const { data, error } = await supabase.functions.invoke("admin-set-overdraft", {
-      body: { user_id: userId, overdraft_limit_eur: value },
-    });
-    let saved = !error && !data?.error;
-    if (!saved) {
-      // Fallback direct en base (si la fonction n'est pas déployée sur ce backend)
-      const { data: existing } = await supabase
-        .from("wallets")
-        .select("user_id")
-        .eq("user_id", userId)
-        .maybeSingle();
-      const res = existing
-        ? await supabase
-            .from("wallets")
-            .update({ overdraft_limit_eur: value, updated_at: new Date().toISOString() })
-            .eq("user_id", userId)
-            .select("user_id")
-        : await supabase
-            .from("wallets")
-            .insert({ user_id: userId, overdraft_limit_eur: value, balance: 0, total_credited: 0, total_spent: 0 })
-            .select("user_id");
-      if (res.error) return toast.error(res.error.message);
-      if (!res.data || res.data.length === 0) {
-        return toast.error("Écriture refusée (droits admin manquants sur les wallets)");
-      }
-      saved = true;
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (sessionError || !accessToken) return toast.error("Session admin expirée, reconnecte-toi");
+
+    let response: Response;
+    try {
+      response = await fetch(`${SUPABASE_FUNCTIONS_URL}/admin-set-overdraft`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          apikey: SUPABASE_ANON_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ user_id: userId, overdraft_limit_eur: value }),
+      });
+    } catch {
+      return toast.error("Impossible de joindre le serveur");
+    }
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result?.error) {
+      return toast.error(result?.error ?? `Erreur serveur (${response.status})`);
     }
     // Mise à jour optimiste immédiate de l'encoche
     setWallets((s) => ({
