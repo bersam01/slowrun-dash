@@ -44,8 +44,10 @@ async function loadNetworks(admin: Admin): Promise<NetworkConfig[]> {
         (n.id === "TRC20"
           ? (Deno.env.get("TRON_USDT_ADDRESS") ?? "").trim()
           : (Deno.env.get("SOLANA_ADDRESS") ?? "").trim()),
-      contract: String(n.contract ?? "").trim() || (n.id === "TRC20" ? USDT_TRC20_CONTRACT : USDC_SPL_MINT),
-      rate_eur: Number(n.rate_eur) > 0 ? Number(n.rate_eur) : 1.08,
+      contract: isNative(n)
+        ? "native"
+        : String(n.contract ?? "").trim() || (n.id === "TRC20" ? USDT_TRC20_CONTRACT : USDC_SPL_MINT),
+      rate_eur: Number(n.rate_eur) > 0 ? Number(n.rate_eur) : 0,
     }));
   }
 
@@ -73,13 +75,44 @@ async function loadNetworks(admin: Admin): Promise<NetworkConfig[]> {
       enabled: Boolean(solAddress),
       sort_order: 2,
     },
+    {
+      id: "SOLNATIVE",
+      label: "SOL · Solana",
+      token_symbol: "SOL",
+      address: solAddress,
+      contract: "native",
+      rate_eur: 0, // 0 = taux live (prix du SOL)
+      enabled: Boolean(solAddress),
+      sort_order: 3,
+    },
   ];
+}
+
+/** Prix live d'un token natif (EUR) -> nombre de tokens pour 1 €. */
+async function liveRateEur(network: NetworkConfig): Promise<number> {
+  if (Number(network.rate_eur) > 0) return Number(network.rate_eur);
+  const ids: Record<string, string> = { SOLNATIVE: "solana", TRXNATIVE: "tron" };
+  const coin = ids[network.id] ?? "solana";
+  const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin}&vs_currencies=eur`);
+  if (!res.ok) throw new Error(`Prix indisponible (${res.status})`);
+  const payload = await res.json();
+  const price = Number(payload?.[coin]?.eur);
+  if (!Number.isFinite(price) || price <= 0) throw new Error("Prix indisponible");
+  // marge de 2% pour couvrir la volatilité
+  return +(1.02 / price).toFixed(8);
 }
 
 const publicNetworks = (networks: NetworkConfig[]) =>
   networks
     .filter((n) => n.enabled && n.address)
-    .map((n) => ({ id: n.id, label: n.label, token_symbol: n.token_symbol, rate_eur: n.rate_eur }));
+    .map((n) => ({
+      id: n.id,
+      label: n.label,
+      token_symbol: n.token_symbol,
+      rate_eur: n.rate_eur,
+      decimals: tokenDecimals(n),
+    }));
+
 
 async function notifyDiscord(
   admin: Admin,
