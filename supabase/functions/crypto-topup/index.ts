@@ -431,10 +431,125 @@ async function fetchSolanaNativeTransfers(owner: string): Promise<Transfer[]> {
   return transfers;
 }
 
+/** Transferts TRX natifs entrants. */
+async function fetchTronNativeTransfers(address: string): Promise<Transfer[]> {
+  const url = new URL(`https://api.trongrid.io/v1/accounts/${address}/transactions`);
+  url.searchParams.set("limit", "100");
+  url.searchParams.set("only_confirmed", "true");
+  url.searchParams.set("only_to", "true");
+  const headers: Record<string, string> = {};
+  const apiKey = Deno.env.get("TRONGRID_API_KEY");
+  if (apiKey) headers["TRON-PRO-API-KEY"] = apiKey;
+  const res = await fetch(url.toString(), { headers });
+  if (!res.ok) throw new Error(`TronGrid ${res.status}`);
+  const payload = await res.json();
+  const rows = Array.isArray(payload?.data) ? payload.data : [];
+  const out: Transfer[] = [];
+  for (const row of rows) {
+    const c = row?.raw_data?.contract?.[0];
+    if (c?.type !== "TransferContract") continue;
+    const value = Number(c?.parameter?.value?.amount ?? 0);
+    if (value <= 0) continue;
+    out.push({
+      tx_hash: String(row?.txID ?? ""),
+      amount: value / 1_000_000,
+      timestamp: Number(row?.block_timestamp ?? 0),
+    });
+  }
+  return out.filter((t) => Boolean(t.tx_hash));
+}
+
+/** Transferts EVM entrants (natif ou ERC20) via Etherscan v2 (clé) ou Blockscout (public). */
+async function fetchEvmTransfers(network: NetworkConfig): Promise<Transfer[]> {
+  const meta = network.meta;
+  const address = network.address.toLowerCase();
+  const native = isNative(network);
+  const action = native ? "txlist" : "tokentx";
+  const key = (Deno.env.get("ETHERSCAN_API_KEY") ?? "").trim();
+
+  let url: string;
+  if (key && meta.evm?.chainId) {
+    const u = new URL("https://api.etherscan.io/v2/api");
+    u.searchParams.set("chainid", String(meta.evm.chainId));
+    u.searchParams.set("module", "account");
+    u.searchParams.set("action", action);
+    u.searchParams.set("address", network.address);
+    if (!native) u.searchParams.set("contractaddress", network.contract);
+    u.searchParams.set("sort", "desc");
+    u.searchParams.set("page", "1");
+    u.searchParams.set("offset", "50");
+    u.searchParams.set("apikey", key);
+    url = u.toString();
+  } else if (meta.evm?.blockscout) {
+    const u = new URL(`${meta.evm.blockscout}/api`);
+    u.searchParams.set("module", "account");
+    u.searchParams.set("action", action);
+    u.searchParams.set("address", network.address);
+    if (!native) u.searchParams.set("contractaddress", network.contract);
+    u.searchParams.set("sort", "desc");
+    u.searchParams.set("page", "1");
+    u.searchParams.set("offset", "50");
+    url = u.toString();
+  } else {
+    throw new Error(`Aucun explorateur configuré pour ${network.id} (ajoute la clé ETHERSCAN_API_KEY)`);
+  }
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Explorer ${network.id} ${res.status}`);
+  const payload = await res.json();
+  const rows = Array.isArray(payload?.result) ? payload.result : [];
+
+  return rows
+    .filter((row: Record<string, unknown>) =>
+      String(row?.to ?? "").toLowerCase() === address &&
+      String(row?.isError ?? "0") !== "1" &&
+      (native || String(row?.contractAddress ?? "").toLowerCase() === network.contract.toLowerCase())
+    )
+    .map((row: Record<string, unknown>) => {
+      const decimals = native ? 18 : Number(row?.tokenDecimal ?? 18);
+      return {
+        tx_hash: String(row?.hash ?? ""),
+        amount: Number(String(row?.value ?? "0")) / Math.pow(10, decimals),
+        timestamp: Number(row?.timeStamp ?? 0) * 1000,
+      };
+    })
+    .filter((t: Transfer) => Boolean(t.tx_hash) && t.amount > 0);
+}
+
+/** Transferts entrants sur une chaîne UTXO (BTC, LTC, DOGE, BCH) via Blockchair. */
+async function fetchUtxoTransfers(network: NetworkConfig): Promise<Transfer[]> {
+  const chain = network.meta.utxo ?? "bitcoin";
+  const u = new URL(`https://api.blockchair.com/${chain}/dashboards/address/${network.address}`);
+  u.searchParams.set("limit", "50");
+  const key = (Deno.env.get("BLOCKCHAIR_API_KEY") ?? "").trim();
+  if (key) u.searchParams.set("key", key);
+  const res = await fetch(u.toString());
+  if (!res.ok) throw new Error(`Blockchair ${chain} ${res.status}`);
+  const payload = await res.json();
+  const data = payload?.data?.[network.address] ?? Object.values(payload?.data ?? {})[0];
+  const utxos = Array.isArray((data as { utxo?: unknown[] })?.utxo) ? (data as { utxo: Array<Record<string, unknown>> }).utxo : [];
+
+  return utxos
+    .map((o) => ({
+      tx_hash: String(o?.transaction_hash ?? ""),
+      amount: Number(o?.value ?? 0) / 100_000_000,
+      timestamp: Date.parse(String(o?.block_id ? (o?.time ?? "") : (o?.time ?? ""))) || Date.now(),
+    }))
+    .filter((t) => Boolean(t.tx_hash) && t.amount > 0);
+}
+
 async function fetchTransfers(network: NetworkConfig): Promise<Transfer[]> {
-  if (isNative(network)) return fetchSolanaNativeTransfers(network.address);
-  if (network.id === "SOL") return fetchSolanaTransfers(network.address, network.contract);
-  return fetchTronTransfers(network.address, network.contract);
+  const chain = network.meta.chain;
+  if (chain === "solana") {
+    return isNative(network)
+      ? fetchSolanaNativeTransfers(network.address)
+      : fetchSolanaTransfers(network.address, network.contract);
+  }
+  if (chain === "evm") return fetchEvmTransfers(network);
+  if (chain === "utxo") return fetchUtxoTransfers(network);
+  return isNative(network)
+    ? fetchTronNativeTransfers(network.address)
+    : fetchTronTransfers(network.address, network.contract);
 }
 
 
