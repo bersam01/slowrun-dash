@@ -128,10 +128,22 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 )}
               </div>
             )}
-            {/* Mobile compact avatar */}
-            {profile?.avatar_url && (
-              <img src={profile.avatar_url} alt="" className="h-8 w-8 rounded-full sm:hidden" />
-            )}
+            {/* Mobile compact avatar + rôle */}
+            <div className="flex items-center gap-1.5 sm:hidden">
+              {profile?.avatar_url && (
+                <img src={profile.avatar_url} alt="" className="h-8 w-8 rounded-full" />
+              )}
+              {profile?.member_tag && (
+                <Badge
+                  variant="default"
+                  className="gap-1 border-0 px-2 py-0.5 text-[10px] uppercase tracking-wider text-white"
+                  style={{ backgroundColor: roleColor ?? DEFAULT_ROLE_COLOR }}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  {profile.member_tag}
+                </Badge>
+              )}
+            </div>
             <Button variant="destructive" size="sm" onClick={handleLogout} className="px-2 sm:px-3">
               <LogOut className="h-4 w-4 sm:mr-1" />
               <span className="hidden sm:inline">Log Out</span>
