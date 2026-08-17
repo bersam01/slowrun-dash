@@ -72,12 +72,6 @@ interface PurchaseRow {
   profiles?: { display_name: string | null };
 }
 
-interface RevenueShareConfig {
-  bot_name: string | null;
-  partner_user_id: string | null;
-  share_pct: number;
-}
-
 interface ProductRow {
   id: string;
   name: string;
