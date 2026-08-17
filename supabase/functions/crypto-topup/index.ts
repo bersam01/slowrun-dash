@@ -237,6 +237,34 @@ async function solanaRpc(method: string, params: unknown[]) {
   return payload?.result;
 }
 
+/** Exécute plusieurs appels Solana en une requête pour éviter le rate-limit du RPC public. */
+async function solanaRpcBatch(method: string, paramsList: unknown[][]) {
+  if (!paramsList.length) return [];
+  const rpc = Deno.env.get("SOLANA_RPC_URL")?.trim() || "https://api.mainnet-beta.solana.com";
+  const res = await fetch(rpc, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(paramsList.map((params, index) => ({
+      jsonrpc: "2.0",
+      id: index + 1,
+      method,
+      params,
+    }))),
+  });
+  if (!res.ok) throw new Error(`Solana RPC batch ${res.status}`);
+  const payload = await res.json();
+  if (!Array.isArray(payload)) throw new Error("Solana RPC batch invalide");
+  const byId = new Map(payload.map((row) => [Number(row?.id), row]));
+  return paramsList.map((_, index) => {
+    const row = byId.get(index + 1);
+    if (row?.error) {
+      console.error("Solana RPC batch item failed", row.error);
+      return null;
+    }
+    return row?.result ?? null;
+  });
+}
+
 /** Transferts SPL entrants (mint donné) vers l'adresse Solana du marchand. */
 async function fetchSolanaTransfers(owner: string, mint: string): Promise<Transfer[]> {
   const accounts = await solanaRpc("getTokenAccountsByOwner", [
@@ -304,15 +332,19 @@ async function fetchSolanaNativeTransfers(owner: string): Promise<Transfer[]> {
   const list = Array.isArray(sigs) ? sigs : [];
   const transfers: Transfer[] = [];
 
-  for (const sig of list) {
-    if (sig?.err) continue;
-    const signature = String(sig?.signature ?? "");
-    if (!signature) continue;
-
-    const tx = await solanaRpc("getTransaction", [
-      signature,
+  const validSignatures = list.filter((sig) => !sig?.err && Boolean(sig?.signature));
+  const transactions = await solanaRpcBatch(
+    "getTransaction",
+    validSignatures.map((sig) => [
+      String(sig.signature),
       { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 },
-    ]);
+    ]),
+  );
+
+  for (let index = 0; index < validSignatures.length; index += 1) {
+    const sig = validSignatures[index];
+    const signature = String(sig.signature);
+    const tx = transactions[index];
     if (!tx?.meta) continue;
 
     const keys: Array<{ pubkey?: string }> = tx?.transaction?.message?.accountKeys ?? [];
