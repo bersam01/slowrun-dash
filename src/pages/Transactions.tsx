@@ -115,13 +115,15 @@ const Transactions = () => {
     ]);
 
     const list: Tx[] = [
-      ...((payRes.data ?? []) as any[]).map((p) => ({
-        id: p.id,
-        kind: "card" as Kind,
-        amount_eur: Number(p.amount ?? 0),
-        status: String(p.status ?? "pending"),
-        created_at: p.created_at,
-      })),
+      ...((payRes.data ?? []) as any[])
+        .filter((p) => String(p.provider ?? "").toLowerCase() !== "crypto")
+        .map((p) => ({
+          id: p.id,
+          kind: "card" as Kind,
+          amount_eur: Number(p.amount ?? 0),
+          status: String(p.status ?? "pending"),
+          created_at: p.created_at,
+        })),
       ...((cryptoRes.data ?? []) as any[]).map((c) => ({
         id: c.id,
         kind: "crypto" as Kind,
