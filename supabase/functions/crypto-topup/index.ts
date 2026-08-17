@@ -554,7 +554,15 @@ Deno.serve(async (req) => {
     return json({
       ok: true,
       networks: publicNetworks(networks),
-      pending: pending ? { ...pending, token_symbol: pendingNetwork?.token_symbol ?? "USDT", label: pendingNetwork?.label ?? pending.network } : null,
+      pending: pending
+        ? {
+            ...pending,
+            token_symbol: pendingNetwork?.token_symbol ?? "USDT",
+            label: pendingNetwork?.label ?? pending.network,
+            decimals: pendingNetwork ? tokenDecimals(pendingNetwork) : 2,
+          }
+        : null,
+
       last_paid: lastPaid ?? null,
       credited_count: credited.length,
     });
