@@ -334,16 +334,6 @@ const Transactions = () => {
                   <span>{new Date(selected.paid_at).toLocaleString("fr-FR")}</span>
                 </div>
               )}
-              {selected.tx_hash && (
-                <a
-                  href={explorerUrl(selected.network, selected.tx_hash) ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block break-all text-xs text-primary underline"
-                >
-                  Voir la transaction : {selected.tx_hash}
-                </a>
-              )}
               {selected.status === "pending" && selected.expires_at && (
                 <p className="text-xs text-muted-foreground">
                   Expire le {new Date(selected.expires_at).toLocaleString("fr-FR")}
