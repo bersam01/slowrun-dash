@@ -469,20 +469,29 @@ Deno.serve(async (req) => {
       const network = requestedId ? available.find((n) => n.id === requestedId) : available[0];
       if (!network) return json({ error: "Aucun réseau crypto disponible pour le moment." }, 400);
 
-      const base = amountEur * network.rate_eur;
+      let rate: number;
+      try {
+        rate = await liveRateEur(network);
+      } catch (e) {
+        return json({ error: (e as Error).message }, 502);
+      }
+      const base = amountEur * rate;
+      const decimals = tokenDecimals(network);
+      const step = Math.pow(10, -decimals);
+      const factor = Math.pow(10, decimals);
 
-      // centimes uniques (par réseau) -> identification du payeur
+      // dernières décimales uniques (par réseau) -> identification du payeur
       const { data: activeRows } = await admin
         .from("crypto_payments")
         .select("amount_usdt")
         .eq("status", "pending")
         .eq("network", network.id);
-      const taken = new Set((activeRows ?? []).map((r: { amount_usdt: number }) => Number(r.amount_usdt).toFixed(2)));
+      const taken = new Set((activeRows ?? []).map((r: { amount_usdt: number }) => Number(r.amount_usdt).toFixed(decimals)));
 
       let amountToken = 0;
-      for (let cents = 0; cents < 100; cents += 1) {
-        const candidate = +(Math.floor(base * 100) / 100 + cents / 100).toFixed(2);
-        if (!taken.has(candidate.toFixed(2))) {
+      for (let i = 0; i < 100; i += 1) {
+        const candidate = +(Math.floor(base * factor) / factor + i * step).toFixed(decimals);
+        if (!taken.has(candidate.toFixed(decimals))) {
           amountToken = candidate;
           break;
         }
@@ -505,8 +514,12 @@ Deno.serve(async (req) => {
         .single();
 
       if (error) return json({ error: error.message }, 500);
-      return json({ ok: true, payment: { ...created, token_symbol: network.token_symbol, label: network.label } });
+      return json({
+        ok: true,
+        payment: { ...created, token_symbol: network.token_symbol, label: network.label, decimals },
+      });
     }
+
 
     if (action === "cancel") {
       const id = String(body?.id ?? "");
