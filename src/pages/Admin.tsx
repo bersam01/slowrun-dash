@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2, Calculator, Share2, History, AlertCircle, Bitcoin, Crown } from "lucide-react";
+import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2, Calculator, History, AlertCircle, Bitcoin, Crown } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -72,12 +72,6 @@ interface PurchaseRow {
   profiles?: { display_name: string | null };
 }
 
-interface RevenueShareConfig {
-  bot_name: string | null;
-  partner_user_id: string | null;
-  share_pct: number;
-}
-
 interface ProductRow {
   id: string;
   name: string;
@@ -112,22 +106,6 @@ interface RefundRow {
 
 const UNLIMITED_OVERDRAFT = 1000000;
 
-const normalizeBotName = (value: string | null | undefined) =>
-
-  String(value ?? "")
-    .normalize("NFKD")
-    .replace(/[•·].*$/u, "")
-    .replace(/\bv?\d+(?:\.\d+)+(?:\b.*)?$/i, "")
-    .replace(/[^a-z0-9]+/gi, "")
-    .toLowerCase()
-    .trim();
-
-const matchesBotName = (sourceBot: string | null | undefined, configuredBot: string | null | undefined) => {
-  const source = normalizeBotName(sourceBot);
-  const configured = normalizeBotName(configuredBot);
-  if (!source || !configured) return false;
-  return source === configured || source.startsWith(configured) || configured.startsWith(source);
-};
 
 const inferPurchaseBot = (purchase: PurchaseRow) => {
   if (purchase.source_bot) return purchase.source_bot;
@@ -162,9 +140,6 @@ const Admin = () => {
   const [creditAmount, setCreditAmount] = useState<Record<string, number>>({});
   const [newProd, setNewProd] = useState({ name: "", description: "", price_eur: 0, image_url: "", stock: "", bonus_credit_eur: "" });
   const [refundForm, setRefundForm] = useState({ user_id: "", amount: "", note: "" });
-  const [shareConfig, setShareConfig] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
-  const [shareConfigDraft, setShareConfigDraft] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
-  const [sharedPurchases, setSharedPurchases] = useState<PurchaseRow[]>([]);
   const [historyUser, setHistoryUser] = useState<AdminProfile | null>(null);
   const [historyPurchases, setHistoryPurchases] = useState<PurchaseRow[]>([]);
   const [historyProducts, setHistoryProducts] = useState<{ id: string; product_name: string; quantity: number; total_eur: number; price_eur: number; status: string; created_at: string }[]>([]);
@@ -293,7 +268,7 @@ const Admin = () => {
   };
 
   const load = async () => {
-    const [u, c, p, pu, pr, w, rf, sc] = await Promise.all([
+    const [u, c, p, pu, pr, w, rf] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("credit_requests").select("*, profiles(display_name)").order("created_at", { ascending: false }),
       supabase.from("payments").select("*, profiles(display_name)").order("created_at", { ascending: false }).limit(50),
@@ -301,7 +276,6 @@ const Admin = () => {
       supabase.from("products").select("*").order("created_at", { ascending: false }),
       supabase.from("wallets").select("user_id, balance, total_credited, total_spent, overdraft_limit_eur"),
       supabase.from("refunds").select("*").order("created_at", { ascending: false }).limit(100),
-      supabase.from("revenue_share_config").select("bot_name, partner_user_id, share_pct").maybeSingle(),
     ]);
     setUsers((u.data ?? []) as AdminProfile[]);
     setCredits((c.data ?? []) as CreditReq[]);
@@ -312,20 +286,6 @@ const Admin = () => {
     ((w.data ?? []) as WalletRow[]).forEach((row) => { wMap[row.user_id] = row; });
     setWallets(wMap);
     setRefunds((rf.data ?? []) as RefundRow[]);
-    const cfg = (sc.data ?? { bot_name: "", partner_user_id: "", share_pct: 50 }) as RevenueShareConfig;
-    setShareConfig(cfg);
-    setShareConfigDraft({ bot_name: cfg.bot_name ?? "", partner_user_id: cfg.partner_user_id ?? "", share_pct: cfg.share_pct ?? 50 });
-
-    // Load all purchases matching the configured bot (separate query, no limit on filter)
-    if (cfg.bot_name) {
-      const { data: sp } = await supabase
-        .from("purchases")
-        .select("*, profiles(display_name)")
-        .order("created_at", { ascending: false });
-      setSharedPurchases(((sp ?? []) as PurchaseRow[]).filter((purchase) => matchesBotName(inferPurchaseBot(purchase), cfg.bot_name)));
-    } else {
-      setSharedPurchases([]);
-    }
   };
 
   useEffect(() => {
@@ -450,30 +410,6 @@ const Admin = () => {
     if (error) toast.error(error.message); else load();
   };
 
-  const saveShareConfig = async () => {
-    const payload = {
-      id: true,
-      bot_name: shareConfigDraft.bot_name?.trim() || null,
-      partner_user_id: shareConfigDraft.partner_user_id || null,
-      share_pct: Number(shareConfigDraft.share_pct) || 50,
-      updated_at: new Date().toISOString(),
-    };
-    const { error } = await supabase.from("revenue_share_config").upsert(payload, { onConflict: "id" });
-    if (error) return toast.error(error.message);
-    toast.success("Config partage sauvegardée");
-    load();
-  };
-
-  const assignPurchaseToTrackedBot = async (purchaseId: string) => {
-    if (!shareConfig.bot_name) return toast.error("Configure d'abord le bot suivi dans l'onglet Partage");
-    const { error } = await supabase.functions.invoke("admin-tag-purchase-bot", {
-      body: { purchase_id: purchaseId, source_bot: shareConfig.bot_name },
-    });
-    if (error) return toast.error(error.message);
-    toast.success("Panier ajouté au partage");
-    load();
-  };
-
   const openHistory = async (user: AdminProfile) => {
     setHistoryUser(user);
     setHistoryLoading(true);
@@ -566,11 +502,6 @@ const Admin = () => {
   const totalRefunded = refunds.reduce((sum, r) => sum + Number(r.refund_eur), 0);
   const totalFees = refunds.reduce((sum, r) => sum + Number(r.fee_eur), 0);
 
-  const sharePct = Number(shareConfig.share_pct ?? 50);
-  const partner = users.find((u) => u.id === shareConfig.partner_user_id);
-  const totalCommissionShared = sharedPurchases.reduce((s, p) => s + Number(p.commission ?? 0), 0);
-  const totalDueToPartner = +(totalCommissionShared * sharePct / 100).toFixed(2);
-
   return (
     <DashboardLayout>
       <div className="mb-8">
@@ -596,7 +527,6 @@ const Admin = () => {
           <TabsTrigger value="payments">Paiements</TabsTrigger>
           <TabsTrigger value="purchases"><ShoppingCart className="mr-1 h-4 w-4" />Achats</TabsTrigger>
           <TabsTrigger value="accounting"><Calculator className="mr-1 h-4 w-4" />Comptabilité</TabsTrigger>
-          <TabsTrigger value="share"><Share2 className="mr-1 h-4 w-4" />Partage</TabsTrigger>
           <TabsTrigger value="roles"><Crown className="mr-1 h-4 w-4" />Rôles</TabsTrigger>
           <TabsTrigger value="crypto"><Bitcoin className="mr-1 h-4 w-4" />Crypto</TabsTrigger>
         </TabsList>
@@ -1032,13 +962,8 @@ const Admin = () => {
                 <div className="min-w-0">
                   <div className="font-medium truncate">{p.event_name}</div>
                   <div className="text-xs text-muted-foreground">{p.profiles?.display_name ?? "—"} • {p.store} • Qté {p.quantity}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>Source bot : {inferPurchaseBot(p) || "—"}</span>
-                    {shareConfig.bot_name && !matchesBotName(inferPurchaseBot(p), shareConfig.bot_name) && (
-                      <Button size="sm" variant="outline" onClick={() => assignPurchaseToTrackedBot(p.id)}>
-                        Ajouter à {shareConfig.bot_name}
-                      </Button>
-                    )}
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Source bot : {inferPurchaseBot(p) || "—"}
                   </div>
                 </div>
                 <div className="text-right">
@@ -1141,92 +1066,6 @@ const Admin = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="share" className="mt-4">
-          <Card className="glass-card p-6">
-            <h3 className="text-lg font-semibold">Configuration du partage</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Quand un panier est pris par le bot configuré, sa commission est partagée avec le partenaire.
-              Le bot doit envoyer un champ <code>source_bot</code> (ou <code>bot</code>, <code>bot_name</code>, <code>bot_id</code>) dans le payload <code>purchase</code>.
-            </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <div>
-                <Label>Nom du bot (source_bot)</Label>
-                <Input
-                  value={shareConfigDraft.bot_name ?? ""}
-                  placeholder="ex: cybr"
-                  onChange={(e) => setShareConfigDraft({ ...shareConfigDraft, bot_name: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Partenaire</Label>
-                <select
-                  className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  value={shareConfigDraft.partner_user_id ?? ""}
-                  onChange={(e) => setShareConfigDraft({ ...shareConfigDraft, partner_user_id: e.target.value })}
-                >
-                  <option value="">— Choisir —</option>
-                  {users.filter((u) => u.status === "approved").map((u) => (
-                    <option key={u.id} value={u.id}>{u.display_name ?? u.id.slice(0, 8)}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label>Part partenaire (%)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="1"
-                  value={shareConfigDraft.share_pct}
-                  onChange={(e) => setShareConfigDraft({ ...shareConfigDraft, share_pct: Number(e.target.value) })}
-                />
-              </div>
-            </div>
-            <Button className="mt-4" onClick={saveShareConfig}>Sauvegarder</Button>
-          </Card>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <Card className="glass-card p-4">
-              <div className="text-sm text-muted-foreground">Bot suivi</div>
-              <div className="mt-1 text-2xl font-bold">{shareConfig.bot_name || "—"}</div>
-            </Card>
-            <Card className="glass-card p-4">
-              <div className="text-sm text-muted-foreground">Partenaire</div>
-              <div className="mt-1 text-xl font-bold">{partner?.display_name ?? "—"}</div>
-            </Card>
-            <Card className="glass-card p-4">
-              <div className="text-sm text-muted-foreground">Total dû ({sharePct}% des commissions)</div>
-              <div className="mt-1 text-2xl font-bold text-primary">{totalDueToPartner.toFixed(2)} €</div>
-              <div className="text-xs text-muted-foreground">Commission totale : {totalCommissionShared.toFixed(2)} €</div>
-            </Card>
-          </div>
-
-          <Card className="glass-card mt-4 p-6">
-            <h3 className="mb-4 text-lg font-semibold">Paniers du bot ({sharedPurchases.length})</h3>
-            {!shareConfig.bot_name ? (
-              <div className="py-6 text-center text-muted-foreground">Configure d'abord le nom du bot ci-dessus.</div>
-            ) : sharedPurchases.length === 0 ? (
-              <div className="py-6 text-center text-muted-foreground">Aucun panier pour ce bot pour le moment.</div>
-            ) : sharedPurchases.map((p) => {
-              const com = Number(p.commission ?? 0);
-              const part = +(com * sharePct / 100).toFixed(2);
-              return (
-                <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 py-3 last:border-0">
-                  <div className="min-w-0">
-                    <div className="font-medium truncate">{p.event_name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {p.profiles?.display_name ?? "—"} • {p.store} • Qté {p.quantity} • {new Date(p.created_at).toLocaleString("fr-FR")}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm">Commission : <span className="font-semibold">{com.toFixed(2)} €</span></div>
-                    <div className="text-sm text-primary">Part partenaire : <span className="font-bold">{part.toFixed(2)} €</span></div>
-                  </div>
-                </div>
-              );
-            })}
-          </Card>
-        </TabsContent>
       </Tabs>
 
       <Dialog open={!!historyUser} onOpenChange={(o) => { if (!o) { setHistoryUser(null); setHistoryPurchases([]); setHistoryProducts([]); } }}>
