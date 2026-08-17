@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { Badge } from "@/components/ui/badge";
-import { LayoutDashboard, ShieldCheck, Package, LogOut, Wallet, Sparkles, Share2 } from "lucide-react";
+import { LayoutDashboard, ShieldCheck, Package, LogOut, Wallet, Sparkles, Share2 , History} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -63,6 +63,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navItems = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/credit", label: "Créditer", icon: Wallet },
+    { to: "/transactions", label: "Historique", icon: History },
     { to: "/products", label: "Produits", icon: Package },
     ...(partnerCheckDone && isPartner && !isAdmin ? [{ to: "/collab", label: "Collab", icon: Share2 }] : []),
     ...(isAdmin ? [{ to: "/admin", label: "Admin", icon: ShieldCheck }] : []),
@@ -129,7 +130,10 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
       {/* Mobile bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border/50 bg-background/95 backdrop-blur md:hidden">
-        <div className="grid h-16 grid-cols-4 px-1 pb-[env(safe-area-inset-bottom)]">
+        <div
+          className="grid h-16 px-1 pb-[env(safe-area-inset-bottom)]"
+          style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
+        >
           {navItems.map(({ to, label, icon: Icon }) => {
             const active = location.pathname === to;
             return (
