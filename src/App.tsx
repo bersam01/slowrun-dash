@@ -34,13 +34,13 @@ const App = () => (
           <Route path="/mentions-legales" element={<Legal />} />
           <Route path="/pending" element={<Pending />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/credit" element={<ProtectedRoute><Credit /></ProtectedRoute>} />
-          <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
-          <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+          <Route path="/credit" element={<ProtectedRoute navKey="credit"><Credit /></ProtectedRoute>} />
+          <Route path="/transactions" element={<ProtectedRoute navKey="transactions"><Transactions /></ProtectedRoute>} />
+          <Route path="/products" element={<ProtectedRoute navKey="products"><Products /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
-          <Route path="/securite" element={<ProtectedRoute><Vault /></ProtectedRoute>} />
-          <Route path="/vault" element={<ProtectedRoute><Vault /></ProtectedRoute>} />
-          <Route path="/collab" element={<ProtectedRoute><Collab /></ProtectedRoute>} />
+          <Route path="/securite" element={<ProtectedRoute navKey="securite"><Vault /></ProtectedRoute>} />
+          <Route path="/vault" element={<ProtectedRoute navKey="securite"><Vault /></ProtectedRoute>} />
+          <Route path="/collab" element={<ProtectedRoute navKey="collab"><Collab /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </AuthProvider>
