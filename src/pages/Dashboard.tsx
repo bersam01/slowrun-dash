@@ -45,12 +45,38 @@ interface ProductPurchase {
   created_at: string;
 }
 
+interface CachedStats {
+  balance: number;
+  overdraftLimit: number;
+  totalSpent: number;
+  totalCredited: number;
+  purchasesCount: number;
+  productsCount: number;
+}
+
+const statsCacheKey = (userId: string) => `slowrun:dashboard-stats:${userId}`;
+
+const readCachedStats = (userId?: string): CachedStats | null => {
+  if (!userId) return null;
+  try {
+    const raw = localStorage.getItem(statsCacheKey(userId));
+    return raw ? (JSON.parse(raw) as CachedStats) : null;
+  } catch {
+    return null;
+  }
+};
+
 const Dashboard = () => {
   const { profile, loading: authLoading } = useAuth();
-  const [balance, setBalance] = useState(0);
-  const [overdraftLimit, setOverdraftLimit] = useState(0);
-  const [totalSpent, setTotalSpent] = useState(0);
-  const [totalCredited, setTotalCredited] = useState(0);
+  const cached = readCachedStats(profile?.id);
+  const [balance, setBalance] = useState(cached?.balance ?? 0);
+  const [overdraftLimit, setOverdraftLimit] = useState(cached?.overdraftLimit ?? 0);
+  const [totalSpent, setTotalSpent] = useState(cached?.totalSpent ?? 0);
+  const [totalCredited, setTotalCredited] = useState(cached?.totalCredited ?? 0);
+  const [cachedCounts, setCachedCounts] = useState<number | null>(
+    cached ? cached.purchasesCount + cached.productsCount : null
+  );
+  const [hasStats, setHasStats] = useState(!!cached);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [productPurchases, setProductPurchases] = useState<ProductPurchase[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -61,45 +87,87 @@ const Dashboard = () => {
   useEffect(() => {
     if (!profile) return;
     let cancelled = false;
-    (async () => {
-      setLoadingData(true);
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const accessToken = sessionData.session?.access_token;
 
-        if (accessToken) {
-          await fetch(`${SUPABASE_FUNCTIONS_URL}/stripe-checkout`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
-              apikey: SUPABASE_ANON_KEY,
-            },
-            body: JSON.stringify({ reconcile: true }),
-          });
-        }
-      } catch {
-        // best effort uniquement
-      }
+    const hydrate = readCachedStats(profile.id);
+    if (hydrate) {
+      setBalance(hydrate.balance);
+      setOverdraftLimit(hydrate.overdraftLimit);
+      setTotalSpent(hydrate.totalSpent);
+      setTotalCredited(hydrate.totalCredited);
+      setCachedCounts(hydrate.purchasesCount + hydrate.productsCount);
+      setHasStats(true);
+    }
 
+    const fetchAll = async () => {
       const [walletRes, purchaseRes, prodRes] = await Promise.all([
         supabase.from("wallets").select("balance, total_spent, total_credited, overdraft_limit_eur").eq("user_id", profile.id).maybeSingle(),
         supabase.from("purchases").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }).limit(20),
         supabase.from("product_purchases").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }).limit(20),
       ]);
       if (cancelled) return;
-      if (walletRes.data) {
-        setBalance(Number(walletRes.data.balance ?? 0));
-        setOverdraftLimit(Number(walletRes.data.overdraft_limit_eur ?? 0));
-        setTotalSpent(Number(walletRes.data.total_spent ?? 0));
-        setTotalCredited(Number(walletRes.data.total_credited ?? 0));
-      }
-      setPurchases((purchaseRes.data ?? []) as Purchase[]);
-      setProductPurchases((prodRes.data ?? []) as ProductPurchase[]);
+      const nextBalance = Number(walletRes.data?.balance ?? 0);
+      const nextOverdraft = Number(walletRes.data?.overdraft_limit_eur ?? 0);
+      const nextSpent = Number(walletRes.data?.total_spent ?? 0);
+      const nextCredited = Number(walletRes.data?.total_credited ?? 0);
+      const nextPurchases = (purchaseRes.data ?? []) as Purchase[];
+      const nextProducts = (prodRes.data ?? []) as ProductPurchase[];
+
+      setBalance(nextBalance);
+      setOverdraftLimit(nextOverdraft);
+      setTotalSpent(nextSpent);
+      setTotalCredited(nextCredited);
+      setPurchases(nextPurchases);
+      setProductPurchases(nextProducts);
+      setCachedCounts(null);
+      setHasStats(true);
       setLoadingData(false);
+
+      try {
+        localStorage.setItem(
+          statsCacheKey(profile.id),
+          JSON.stringify({
+            balance: nextBalance,
+            overdraftLimit: nextOverdraft,
+            totalSpent: nextSpent,
+            totalCredited: nextCredited,
+            purchasesCount: nextPurchases.length,
+            productsCount: nextProducts.length,
+          } satisfies CachedStats)
+        );
+      } catch {
+        // stockage indisponible
+      }
+    };
+
+    // 1) On affiche les données tout de suite, sans attendre la réconciliation Stripe.
+    setLoadingData(true);
+    fetchAll();
+
+    // 2) Réconciliation Stripe en arrière-plan, puis rafraîchissement silencieux.
+    (async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) return;
+        await fetch(`${SUPABASE_FUNCTIONS_URL}/stripe-checkout`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+            apikey: SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ reconcile: true }),
+        });
+        if (cancelled) return;
+        await fetchAll();
+      } catch {
+        // best effort uniquement
+      }
     })();
+
     return () => { cancelled = true; };
   }, [profile]);
+
 
   const filtered = purchases.filter((p) =>
     (p.event_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
@@ -114,6 +182,9 @@ const Dashboard = () => {
   })();
 
   const isLoading = authLoading || !profile || loadingData;
+  const statsPending = !hasStats;
+  const purchaseCount = cachedCounts ?? purchases.length + productPurchases.length;
+
 
   return (
     <DashboardLayout>
@@ -146,28 +217,28 @@ const Dashboard = () => {
       <div className="grid gap-5 md:grid-cols-3">
         <StatCard
           title="Solde actuel"
-          value={isLoading ? "…" : `${balance.toFixed(2)} €`}
-          description={isLoading ? "Chargement…" : "Disponible pour achats"}
+          value={statsPending ? "…" : `${balance.toFixed(2)} €`}
+          description={statsPending ? "Chargement…" : "Disponible pour achats"}
           icon={Wallet}
           variant="primary"
         />
         <StatCard
           title="Total achats"
-          value={isLoading ? "…" : (purchases.length + productPurchases.length).toString()}
+          value={statsPending ? "…" : purchaseCount.toString()}
           description="Paniers + produits achetés."
           icon={ShoppingCart}
           variant="accent"
         />
         <StatCard
           title="Total dépensé"
-          value={isLoading ? "…" : `${totalSpent.toFixed(2)} €`}
-          description={isLoading ? "Chargement…" : `Total crédité : ${totalCredited.toFixed(2)} €`}
+          value={statsPending ? "…" : `${totalSpent.toFixed(2)} €`}
+          description={statsPending ? "Chargement…" : `Total crédité : ${totalCredited.toFixed(2)} €`}
           icon={TrendingUp}
           variant="neutral"
         />
       </div>
 
-      {!isLoading && overdraftLimit > 0 && (
+      {!statsPending && overdraftLimit > 0 && (
         <Alert className="mt-5 border-primary/30 bg-primary/10">
           <ShieldCheck className="h-4 w-4 text-primary" />
           <AlertTitle>
@@ -183,7 +254,7 @@ const Dashboard = () => {
         </Alert>
       )}
 
-      {!isLoading && balance < 0 && (
+      {!statsPending && balance < 0 && (
         <Alert variant="destructive" className="mt-5">
           <Shield className="h-4 w-4" />
           <AlertTitle>Solde négatif</AlertTitle>

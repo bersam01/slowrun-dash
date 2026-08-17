@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "@/lib/supabase";
 import { CRYPTO_CATALOG } from "@/lib/cryptoCatalog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MemberRole, ROLE_COLOR_PALETTE, NO_ROLE_VALUE } from "@/lib/memberRoles";
+import { MemberRole, ROLE_COLOR_PALETTE, ROLE_GRADIENT_PALETTE, NO_ROLE_VALUE, roleBadgeStyle, isGradientColor } from "@/lib/memberRoles";
 
 import { toast } from "sonner";
 
@@ -213,7 +213,7 @@ const Admin = () => {
   const [roles, setRoles] = useState<MemberRole[]>([]);
   const [rolesError, setRolesError] = useState<string | null>(null);
   const [newRoleName, setNewRoleName] = useState("");
-  const [newRoleColor, setNewRoleColor] = useState(ROLE_COLOR_PALETTE[0]);
+  const [newRoleColor, setNewRoleColor] = useState(ROLE_GRADIENT_PALETTE[0].value);
 
   const loadRoles = async () => {
     const { data, error } = await supabase.from("member_roles").select("*").order("sort_order", { ascending: true });
@@ -545,13 +545,24 @@ const Admin = () => {
             <div className="mt-5 space-y-4">
               {roles.map((role) => (
                 <div key={role.id} className="flex flex-wrap items-center gap-3 border-b border-border/40 pb-4 last:border-0">
-                  <Badge className="border-0 text-white" style={{ backgroundColor: role.color }}>{role.name}</Badge>
+                  <Badge className="border-0" style={roleBadgeStyle(role.color)}>{role.name}</Badge>
                   <Input
                     defaultValue={role.name}
                     onBlur={(e) => renameRole(role, e.target.value)}
                     className="h-8 w-40 text-xs"
                   />
                   <div className="flex flex-wrap items-center gap-1">
+                    {ROLE_GRADIENT_PALETTE.map((g) => (
+                      <button
+                        key={g.value}
+                        type="button"
+                        title={g.label}
+                        aria-label={`Dégradé ${g.label}`}
+                        onClick={() => updateRole(role.id, { color: g.value })}
+                        className={`h-6 w-9 rounded-md border-2 transition ${role.color === g.value ? "border-foreground" : "border-transparent"}`}
+                        style={{ background: g.value }}
+                      />
+                    ))}
                     {ROLE_COLOR_PALETTE.map((c) => (
                       <button
                         key={c}
@@ -564,7 +575,7 @@ const Admin = () => {
                     ))}
                     <Input
                       type="color"
-                      value={role.color}
+                      value={isGradientColor(role.color) ? "#7c3aed" : role.color}
                       onChange={(e) => updateRole(role.id, { color: e.target.value })}
                       className="h-7 w-10 cursor-pointer p-1"
                     />
@@ -574,6 +585,7 @@ const Admin = () => {
                   </Button>
                 </div>
               ))}
+
               {roles.length === 0 && !rolesError && (
                 <p className="text-sm text-muted-foreground">Aucun rôle pour le moment.</p>
               )}
@@ -589,6 +601,17 @@ const Admin = () => {
                   className="h-9 w-48"
                 />
                 <div className="flex flex-wrap items-center gap-1">
+                  {ROLE_GRADIENT_PALETTE.map((g) => (
+                    <button
+                      key={g.value}
+                      type="button"
+                      title={g.label}
+                      aria-label={`Dégradé ${g.label}`}
+                      onClick={() => setNewRoleColor(g.value)}
+                      className={`h-6 w-9 rounded-md border-2 transition ${newRoleColor === g.value ? "border-foreground" : "border-transparent"}`}
+                      style={{ background: g.value }}
+                    />
+                  ))}
                   {ROLE_COLOR_PALETTE.map((c) => (
                     <button
                       key={c}
@@ -601,11 +624,12 @@ const Admin = () => {
                   ))}
                   <Input
                     type="color"
-                    value={newRoleColor}
+                    value={isGradientColor(newRoleColor) ? "#7c3aed" : newRoleColor}
                     onChange={(e) => setNewRoleColor(e.target.value)}
                     className="h-7 w-10 cursor-pointer p-1"
                   />
                 </div>
+
                 <Button size="sm" onClick={createRole}><Plus className="mr-1 h-4 w-4" />Créer</Button>
               </div>
             </div>
@@ -723,7 +747,7 @@ const Admin = () => {
                 <div className="flex items-center gap-3">
                   {u.avatar_url && <img src={u.avatar_url} className="h-10 w-10 rounded-full" alt="" />}
                   <div>
-                    <div className="font-medium">{u.display_name ?? "—"} {u.is_admin && <Badge className="ml-1 bg-accent text-accent-foreground">Admin</Badge>} {u.member_tag && <Badge className="ml-1 border-0 text-white" style={{ backgroundColor: roles.find((r) => r.name === u.member_tag)?.color ?? "#7c3aed" }}>{u.member_tag}</Badge>}</div>
+                    <div className="font-medium">{u.display_name ?? "—"} {u.is_admin && <Badge className="ml-1 bg-accent text-accent-foreground">Admin</Badge>} {u.member_tag && <Badge className="ml-1 border-0" style={roleBadgeStyle(roles.find((r) => r.name === u.member_tag)?.color)}>{u.member_tag}</Badge>}</div>
                     <div className="text-xs text-muted-foreground">Discord: {u.discord_id ?? "—"}</div>
                     <div className="mt-1 text-xs">
                       <span className="font-semibold text-primary">Solde : {Number(w?.balance ?? 0).toFixed(2)} q</span>
