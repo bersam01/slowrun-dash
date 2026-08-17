@@ -250,7 +250,10 @@ async function fetchSolanaTransfers(owner: string, mint: string): Promise<Transf
   const transfers: Transfer[] = [];
 
   for (const ata of atas) {
-    const sigs = await solanaRpc("getSignaturesForAddress", [ata, { limit: 25 }, { commitment: "confirmed" }]);
+    const sigs = await solanaRpc("getSignaturesForAddress", [
+      ata,
+      { limit: 25, commitment: "confirmed" },
+    ]);
     const list = Array.isArray(sigs) ? sigs : [];
 
     for (const sig of list) {
@@ -294,7 +297,10 @@ async function fetchSolanaTransfers(owner: string, mint: string): Promise<Transf
 
 /** Transferts SOL natifs entrants vers l'adresse du marchand. */
 async function fetchSolanaNativeTransfers(owner: string): Promise<Transfer[]> {
-  const sigs = await solanaRpc("getSignaturesForAddress", [owner, { limit: 25 }, { commitment: "confirmed" }]);
+  const sigs = await solanaRpc("getSignaturesForAddress", [
+    owner,
+    { limit: 25, commitment: "confirmed" },
+  ]);
   const list = Array.isArray(sigs) ? sigs : [];
   const transfers: Transfer[] = [];
 
