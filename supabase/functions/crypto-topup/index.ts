@@ -28,6 +28,14 @@ type NetworkConfig = {
   sort_order: number;
 };
 
+/** true si le réseau reçoit la crypto native (SOL) et non un token. */
+const isNative = (n: { id: string; contract?: string | null }) =>
+  String(n.contract ?? "").trim().toLowerCase() === "native" || n.id === "SOLNATIVE";
+
+/** décimales utilisées pour rendre le montant unique (matching). */
+const tokenDecimals = (n: NetworkConfig) => (isNative(n) ? 4 : 2);
+
+
 type Transfer = { tx_hash: string; amount: number; timestamp: number };
 
 /** Config des réseaux : table crypto_networks si dispo, sinon fallback env (TRON). */
@@ -44,8 +52,10 @@ async function loadNetworks(admin: Admin): Promise<NetworkConfig[]> {
         (n.id === "TRC20"
           ? (Deno.env.get("TRON_USDT_ADDRESS") ?? "").trim()
           : (Deno.env.get("SOLANA_ADDRESS") ?? "").trim()),
-      contract: String(n.contract ?? "").trim() || (n.id === "TRC20" ? USDT_TRC20_CONTRACT : USDC_SPL_MINT),
-      rate_eur: Number(n.rate_eur) > 0 ? Number(n.rate_eur) : 1.08,
+      contract: isNative(n)
+        ? "native"
+        : String(n.contract ?? "").trim() || (n.id === "TRC20" ? USDT_TRC20_CONTRACT : USDC_SPL_MINT),
+      rate_eur: Number(n.rate_eur) > 0 ? Number(n.rate_eur) : 0,
     }));
   }
 
@@ -73,13 +83,44 @@ async function loadNetworks(admin: Admin): Promise<NetworkConfig[]> {
       enabled: Boolean(solAddress),
       sort_order: 2,
     },
+    {
+      id: "SOLNATIVE",
+      label: "SOL · Solana",
+      token_symbol: "SOL",
+      address: solAddress,
+      contract: "native",
+      rate_eur: 0, // 0 = taux live (prix du SOL)
+      enabled: Boolean(solAddress),
+      sort_order: 3,
+    },
   ];
+}
+
+/** Prix live d'un token natif (EUR) -> nombre de tokens pour 1 €. */
+async function liveRateEur(network: NetworkConfig): Promise<number> {
+  if (Number(network.rate_eur) > 0) return Number(network.rate_eur);
+  const ids: Record<string, string> = { SOLNATIVE: "solana", TRXNATIVE: "tron" };
+  const coin = ids[network.id] ?? "solana";
+  const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin}&vs_currencies=eur`);
+  if (!res.ok) throw new Error(`Prix indisponible (${res.status})`);
+  const payload = await res.json();
+  const price = Number(payload?.[coin]?.eur);
+  if (!Number.isFinite(price) || price <= 0) throw new Error("Prix indisponible");
+  // marge de 2% pour couvrir la volatilité
+  return +(1.02 / price).toFixed(8);
 }
 
 const publicNetworks = (networks: NetworkConfig[]) =>
   networks
     .filter((n) => n.enabled && n.address)
-    .map((n) => ({ id: n.id, label: n.label, token_symbol: n.token_symbol, rate_eur: n.rate_eur }));
+    .map((n) => ({
+      id: n.id,
+      label: n.label,
+      token_symbol: n.token_symbol,
+      rate_eur: n.rate_eur,
+      decimals: tokenDecimals(n),
+    }));
+
 
 async function notifyDiscord(
   admin: Admin,
@@ -249,10 +290,49 @@ async function fetchSolanaTransfers(owner: string, mint: string): Promise<Transf
   return transfers;
 }
 
+/** Transferts SOL natifs entrants vers l'adresse du marchand. */
+async function fetchSolanaNativeTransfers(owner: string): Promise<Transfer[]> {
+  const sigs = await solanaRpc("getSignaturesForAddress", [owner, { limit: 25 }, { commitment: "confirmed" }]);
+  const list = Array.isArray(sigs) ? sigs : [];
+  const transfers: Transfer[] = [];
+
+  for (const sig of list) {
+    if (sig?.err) continue;
+    const signature = String(sig?.signature ?? "");
+    if (!signature) continue;
+
+    const tx = await solanaRpc("getTransaction", [
+      signature,
+      { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 },
+    ]);
+    if (!tx?.meta) continue;
+
+    const keys: Array<{ pubkey?: string }> = tx?.transaction?.message?.accountKeys ?? [];
+    const idx = keys.findIndex((k) => String(k?.pubkey ?? k) === owner);
+    if (idx < 0) continue;
+
+    const pre = Number(tx.meta.preBalances?.[idx] ?? 0);
+    const post = Number(tx.meta.postBalances?.[idx] ?? 0);
+    const delta = (post - pre) / 1_000_000_000;
+
+    if (delta > 0) {
+      transfers.push({
+        tx_hash: signature,
+        amount: +delta.toFixed(9),
+        timestamp: Number(tx?.blockTime ?? sig?.blockTime ?? 0) * 1000,
+      });
+    }
+  }
+
+  return transfers;
+}
+
 async function fetchTransfers(network: NetworkConfig): Promise<Transfer[]> {
+  if (isNative(network)) return fetchSolanaNativeTransfers(network.address);
   if (network.id === "SOL") return fetchSolanaTransfers(network.address, network.contract);
   return fetchTronTransfers(network.address, network.contract);
 }
+
 
 /** Rapproche les transferts reçus avec les demandes en attente (matching par montant exact). */
 async function reconcile(admin: Admin, networks: NetworkConfig[]) {
@@ -299,13 +379,15 @@ async function reconcile(admin: Admin, networks: NetworkConfig[]) {
 
     const expected = Number(request.amount_usdt);
     const createdAt = new Date(request.created_at as string).getTime() - 10 * 60 * 1000;
+    const tolerance = isNative(network) ? 0.00005 : 0.005;
 
     const match = transfers.find((tx) =>
       !usedHashes.has(tx.tx_hash) &&
       tx.timestamp >= createdAt &&
-      Math.abs(tx.amount - expected) < 0.005
+      Math.abs(tx.amount - expected) < tolerance
     );
     if (!match) continue;
+
 
     usedHashes.add(match.tx_hash);
 
@@ -387,20 +469,29 @@ Deno.serve(async (req) => {
       const network = requestedId ? available.find((n) => n.id === requestedId) : available[0];
       if (!network) return json({ error: "Aucun réseau crypto disponible pour le moment." }, 400);
 
-      const base = amountEur * network.rate_eur;
+      let rate: number;
+      try {
+        rate = await liveRateEur(network);
+      } catch (e) {
+        return json({ error: (e as Error).message }, 502);
+      }
+      const base = amountEur * rate;
+      const decimals = tokenDecimals(network);
+      const step = Math.pow(10, -decimals);
+      const factor = Math.pow(10, decimals);
 
-      // centimes uniques (par réseau) -> identification du payeur
+      // dernières décimales uniques (par réseau) -> identification du payeur
       const { data: activeRows } = await admin
         .from("crypto_payments")
         .select("amount_usdt")
         .eq("status", "pending")
         .eq("network", network.id);
-      const taken = new Set((activeRows ?? []).map((r: { amount_usdt: number }) => Number(r.amount_usdt).toFixed(2)));
+      const taken = new Set((activeRows ?? []).map((r: { amount_usdt: number }) => Number(r.amount_usdt).toFixed(decimals)));
 
       let amountToken = 0;
-      for (let cents = 0; cents < 100; cents += 1) {
-        const candidate = +(Math.floor(base * 100) / 100 + cents / 100).toFixed(2);
-        if (!taken.has(candidate.toFixed(2))) {
+      for (let i = 0; i < 100; i += 1) {
+        const candidate = +(Math.floor(base * factor) / factor + i * step).toFixed(decimals);
+        if (!taken.has(candidate.toFixed(decimals))) {
           amountToken = candidate;
           break;
         }
@@ -423,8 +514,12 @@ Deno.serve(async (req) => {
         .single();
 
       if (error) return json({ error: error.message }, 500);
-      return json({ ok: true, payment: { ...created, token_symbol: network.token_symbol, label: network.label } });
+      return json({
+        ok: true,
+        payment: { ...created, token_symbol: network.token_symbol, label: network.label, decimals },
+      });
     }
+
 
     if (action === "cancel") {
       const id = String(body?.id ?? "");
@@ -459,7 +554,15 @@ Deno.serve(async (req) => {
     return json({
       ok: true,
       networks: publicNetworks(networks),
-      pending: pending ? { ...pending, token_symbol: pendingNetwork?.token_symbol ?? "USDT", label: pendingNetwork?.label ?? pending.network } : null,
+      pending: pending
+        ? {
+            ...pending,
+            token_symbol: pendingNetwork?.token_symbol ?? "USDT",
+            label: pendingNetwork?.label ?? pending.network,
+            decimals: pendingNetwork ? tokenDecimals(pendingNetwork) : 2,
+          }
+        : null,
+
       last_paid: lastPaid ?? null,
       credited_count: credited.length,
     });

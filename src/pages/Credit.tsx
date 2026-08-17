@@ -24,6 +24,7 @@ type CryptoPayment = {
   expires_at: string;
   token_symbol?: string;
   label?: string;
+  decimals?: number;
 };
 
 type CryptoNetwork = {
@@ -31,7 +32,9 @@ type CryptoNetwork = {
   label: string;
   token_symbol: string;
   rate_eur: number;
+  decimals?: number;
 };
+
 
 const Credit = () => {
   const { profile } = useAuth();
@@ -453,15 +456,16 @@ const Credit = () => {
                   <Label className="text-xs uppercase tracking-wide text-muted-foreground">Montant EXACT à envoyer</Label>
                   <div className="mt-1 flex items-center gap-2">
                     <code className="flex-1 truncate rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-lg font-bold text-primary">
-                      {Number(cryptoPayment.amount_usdt).toFixed(2)} {cryptoPayment.token_symbol ?? "USDT"}
+                      {Number(cryptoPayment.amount_usdt).toFixed(cryptoPayment.decimals ?? 2)} {cryptoPayment.token_symbol ?? "USDT"}
                     </code>
                     <Button
                       variant="outline"
                       size="icon"
-                      onClick={() => copyToClipboard(Number(cryptoPayment.amount_usdt).toFixed(2), "Montant")}
+                      onClick={() => copyToClipboard(Number(cryptoPayment.amount_usdt).toFixed(cryptoPayment.decimals ?? 2), "Montant")}
                     >
                       <Copy className="h-4 w-4" />
                     </Button>
+
                   </div>
                 </div>
 
