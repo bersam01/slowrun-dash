@@ -47,6 +47,7 @@ interface ProductPurchase {
 const Dashboard = () => {
   const { profile, loading: authLoading } = useAuth();
   const [balance, setBalance] = useState(0);
+  const [overdraftLimit, setOverdraftLimit] = useState(0);
   const [totalSpent, setTotalSpent] = useState(0);
   const [totalCredited, setTotalCredited] = useState(0);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -54,6 +55,7 @@ const Dashboard = () => {
   const [loadingData, setLoadingData] = useState(true);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Purchase | null>(null);
+  const UNLIMITED_OVERDRAFT = 1000000;
 
   useEffect(() => {
     if (!profile) return;
