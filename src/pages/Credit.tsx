@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CreditCard, Sparkles, Info } from "lucide-react";
+import { CreditCard, Sparkles, Info, Bitcoin, Copy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,11 +12,124 @@ import { useAuth } from "@/hooks/useAuth";
 const PRESETS = [10, 25, 50, 100, 250, 500];
 const STRIPE_SYNC_MAX_ATTEMPTS = 10;
 const STRIPE_SYNC_RETRY_MS = 2000;
+const CRYPTO_POLL_MS = 15000;
+
+type CryptoPayment = {
+  id: string;
+  amount_eur: number;
+  amount_usdt: number;
+  address: string;
+  network: string;
+  status: string;
+  expires_at: string;
+};
 
 const Credit = () => {
   const { profile } = useAuth();
   const [amount, setAmount] = useState<number>(50);
   const [loading, setLoading] = useState(false);
+  const [cryptoLoading, setCryptoLoading] = useState(false);
+  const [cryptoPayment, setCryptoPayment] = useState<CryptoPayment | null>(null);
+  const cryptoPaymentRef = useRef<CryptoPayment | null>(null);
+  cryptoPaymentRef.current = cryptoPayment;
+
+  const callCrypto = useCallback(async (body: Record<string, unknown>) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) throw new Error("Ta session a expiré, reconnecte-toi.");
+
+    const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/crypto-topup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error ?? `Erreur ${response.status}`);
+    return payload;
+  }, []);
+
+  const handleCryptoCreate = async () => {
+    if (amount < 1) {
+      toast.error("Le montant minimum est de 1 €.");
+      return;
+    }
+    setCryptoLoading(true);
+    try {
+      const payload = await callCrypto({ action: "create", amount });
+      setCryptoPayment(payload.payment as CryptoPayment);
+      toast.success("Adresse de paiement générée", {
+        description: "Envoie le montant EXACT en USDT (TRC20).",
+      });
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setCryptoLoading(false);
+    }
+  };
+
+  const handleCryptoCancel = async () => {
+    const current = cryptoPaymentRef.current;
+    if (!current) return;
+    try {
+      await callCrypto({ action: "cancel", id: current.id });
+    } catch {
+      // best effort
+    }
+    setCryptoPayment(null);
+  };
+
+  // Polling automatique: détecte le virement USDT et crédite le solde
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const payload = await callCrypto({ action: "check" });
+        if (cancelled) return;
+
+        const pending = (payload?.pending ?? null) as CryptoPayment | null;
+        const current = cryptoPaymentRef.current;
+
+        if (current && !pending) {
+          setCryptoPayment(null);
+          const lastPaid = payload?.last_paid;
+          if (lastPaid) {
+            toast.success("🪙 Paiement USDT reçu !", {
+              description: `${Number(lastPaid.amount_eur ?? 0).toFixed(2)} € ont été ajoutés à ton solde.`,
+              duration: 8000,
+            });
+          }
+        } else if (!current && pending) {
+          setCryptoPayment(pending);
+        }
+      } catch {
+        // silencieux
+      }
+    };
+
+    void tick();
+    const interval = window.setInterval(tick, CRYPTO_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [profile?.id, callCrypto]);
+
+  const copyToClipboard = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copié`);
+    } catch {
+      toast.error("Impossible de copier");
+    }
+  };
+
 
    useEffect(() => {
     let cancelled = false;
@@ -253,7 +366,77 @@ const Credit = () => {
               <Sparkles className="h-5 w-5" /> Demande manuelle (admin)
             </Button>
           </div>
+
+          <div className="mt-6 rounded-xl border border-border bg-secondary/20 p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Bitcoin className="h-4 w-4 text-primary" /> Payer en crypto (USDT · TRC20)
+            </div>
+
+            {!cryptoPayment ? (
+              <>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Stable, frais quasi nuls. On génère un montant unique pour identifier ton paiement, le crédit est ajouté automatiquement.
+                </p>
+                <Button
+                  onClick={handleCryptoCreate}
+                  disabled={cryptoLoading}
+                  variant="outline"
+                  size="lg"
+                  className="mt-4 w-full gap-2 h-14 text-base sm:h-11 sm:text-sm"
+                >
+                  {cryptoLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Bitcoin className="h-5 w-5" />}
+                  Générer une adresse USDT ({amount.toFixed(2)} €)
+                </Button>
+              </>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <div>
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">Montant EXACT à envoyer</Label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="flex-1 truncate rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-lg font-bold text-primary">
+                      {Number(cryptoPayment.amount_usdt).toFixed(2)} USDT
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => copyToClipboard(Number(cryptoPayment.amount_usdt).toFixed(2), "Montant")}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Adresse ({cryptoPayment.network})
+                  </Label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="flex-1 truncate rounded-lg border border-border bg-background/60 px-3 py-2 text-sm">
+                      {cryptoPayment.address}
+                    </code>
+                    <Button variant="outline" size="icon" onClick={() => copyToClipboard(cryptoPayment.address, "Adresse")}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Réseau TRON (TRC20) uniquement. Envoie le montant exact au centime près — sinon le paiement ne sera pas
+                  reconnu automatiquement. Tu seras crédité de {Number(cryptoPayment.amount_eur).toFixed(2)} € dès
+                  confirmation (~1 min). Expire à {new Date(cryptoPayment.expires_at).toLocaleTimeString("fr-FR")}.
+                </p>
+
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> En attente du paiement...
+                  <button onClick={handleCryptoCancel} className="ml-auto underline hover:text-foreground">
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </Card>
+
 
         <Card className="glass-card p-6">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
