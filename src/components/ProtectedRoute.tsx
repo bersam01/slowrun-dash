@@ -1,14 +1,17 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useNavVisibility } from "@/hooks/useNavVisibility";
 import { Loader2 } from "lucide-react";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
+  navKey?: string;
 }
 
-export const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps) => {
+export const ProtectedRoute = ({ children, requireAdmin = false, navKey }: ProtectedRouteProps) => {
   const { loading, user, profile, isAdmin } = useAuth();
+  const { isHidden, loaded } = useNavVisibility();
   const location = useLocation();
 
   if (loading) {
@@ -26,6 +29,9 @@ export const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRout
   if (!profile) return <Navigate to="/pending" replace />;
   if (profile.status !== "approved") return <Navigate to="/pending" replace />;
   if (requireAdmin && !isAdmin) return <Navigate to="/dashboard" replace />;
+  if (navKey && !isAdmin && loaded && isHidden(navKey) && navKey !== "dashboard") {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return <>{children}</>;
 };
