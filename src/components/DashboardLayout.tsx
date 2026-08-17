@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { Badge } from "@/components/ui/badge";
 import { DEFAULT_ROLE_COLOR } from "@/lib/memberRoles";
-import { supabase } from "@/lib/supabase";
 import { Sparkles, LayoutDashboard, ShieldCheck, Package, LogOut, Wallet, Share2 , History} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
@@ -20,6 +19,18 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const [isPartner, setIsPartner] = useState(false);
   const [partnerCheckDone, setPartnerCheckDone] = useState(false);
+  const [roleColor, setRoleColor] = useState<string | null>(null);
+
+  useEffect(() => {
+    const tag = profile?.member_tag;
+    if (!tag) { setRoleColor(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("member_roles").select("color").eq("name", tag).maybeSingle();
+      if (!cancelled) setRoleColor((data as { color?: string } | null)?.color ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [profile?.member_tag]);
 
   useEffect(() => {
     if (loading) return;
