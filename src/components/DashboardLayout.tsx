@@ -21,6 +21,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isPartner, setIsPartner] = useState(false);
   const [partnerCheckDone, setPartnerCheckDone] = useState(false);
   const [roleColor, setRoleColor] = useState<string | null>(null);
+  const { isHidden } = useNavVisibility();
 
   useEffect(() => {
     const tag = profile?.member_tag;
