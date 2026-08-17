@@ -226,6 +226,7 @@ const Admin = () => {
 
   useEffect(() => {
     load();
+    loadNetworks();
     // Realtime subscription on wallets so balances update live
     const channel = supabase
       .channel("admin-wallets")
