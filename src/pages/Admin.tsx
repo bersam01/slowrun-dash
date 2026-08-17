@@ -156,9 +156,6 @@ const Admin = () => {
   const [creditAmount, setCreditAmount] = useState<Record<string, number>>({});
   const [newProd, setNewProd] = useState({ name: "", description: "", price_eur: 0, image_url: "", stock: "", bonus_credit_eur: "" });
   const [refundForm, setRefundForm] = useState({ user_id: "", amount: "", note: "" });
-  const [shareConfig, setShareConfig] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
-  const [shareConfigDraft, setShareConfigDraft] = useState<RevenueShareConfig>({ bot_name: "", partner_user_id: "", share_pct: 50 });
-  const [sharedPurchases, setSharedPurchases] = useState<PurchaseRow[]>([]);
   const [historyUser, setHistoryUser] = useState<AdminProfile | null>(null);
   const [historyPurchases, setHistoryPurchases] = useState<PurchaseRow[]>([]);
   const [historyProducts, setHistoryProducts] = useState<{ id: string; product_name: string; quantity: number; total_eur: number; price_eur: number; status: string; created_at: string }[]>([]);
