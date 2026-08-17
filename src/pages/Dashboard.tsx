@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Wallet, ShoppingCart, CheckCircle2, Plus, Search, ExternalLink, TrendingUp, Package } from "lucide-react";
+import { Wallet, ShoppingCart, CheckCircle2, Plus, Search, ExternalLink, TrendingUp, Package, Shield, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "@/lib/supabase";
 import { Link } from "react-router-dom";
@@ -47,6 +48,7 @@ interface ProductPurchase {
 const Dashboard = () => {
   const { profile, loading: authLoading } = useAuth();
   const [balance, setBalance] = useState(0);
+  const [overdraftLimit, setOverdraftLimit] = useState(0);
   const [totalSpent, setTotalSpent] = useState(0);
   const [totalCredited, setTotalCredited] = useState(0);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -54,6 +56,7 @@ const Dashboard = () => {
   const [loadingData, setLoadingData] = useState(true);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Purchase | null>(null);
+  const UNLIMITED_OVERDRAFT = 1000000;
 
   useEffect(() => {
     if (!profile) return;
@@ -80,13 +83,14 @@ const Dashboard = () => {
       }
 
       const [walletRes, purchaseRes, prodRes] = await Promise.all([
-        supabase.from("wallets").select("balance, total_spent, total_credited").eq("user_id", profile.id).maybeSingle(),
+        supabase.from("wallets").select("balance, total_spent, total_credited, overdraft_limit_eur").eq("user_id", profile.id).maybeSingle(),
         supabase.from("purchases").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }).limit(20),
         supabase.from("product_purchases").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }).limit(20),
       ]);
       if (cancelled) return;
       if (walletRes.data) {
         setBalance(Number(walletRes.data.balance ?? 0));
+        setOverdraftLimit(Number(walletRes.data.overdraft_limit_eur ?? 0));
         setTotalSpent(Number(walletRes.data.total_spent ?? 0));
         setTotalCredited(Number(walletRes.data.total_credited ?? 0));
       }
@@ -162,6 +166,32 @@ const Dashboard = () => {
           variant="neutral"
         />
       </div>
+
+      {!isLoading && overdraftLimit > 0 && (
+        <Alert className="mt-5 border-primary/30 bg-primary/10">
+          <ShieldCheck className="h-4 w-4 text-primary" />
+          <AlertTitle>
+            {overdraftLimit >= UNLIMITED_OVERDRAFT
+              ? "Découvert illimité activé"
+              : `Découvert autorisé : ${overdraftLimit.toFixed(2)} €`}
+          </AlertTitle>
+          <AlertDescription>
+            {overdraftLimit >= UNLIMITED_OVERDRAFT
+              ? "Tu peux continuer à acheter même si ton solde passe en négatif."
+              : `Tu peux dépenser jusqu'à ${overdraftLimit.toFixed(2)} € au-delà de ton solde actuel.`}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!isLoading && balance < 0 && (
+        <Alert variant="destructive" className="mt-5">
+          <Shield className="h-4 w-4" />
+          <AlertTitle>Solde négatif</AlertTitle>
+          <AlertDescription>
+            Tu dois créditer {Math.abs(balance).toFixed(2)} € pour revenir à un solde positif.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
         <Card className="glass-card lg:col-span-2 p-6">
