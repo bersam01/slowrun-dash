@@ -22,6 +22,15 @@ type CryptoPayment = {
   network: string;
   status: string;
   expires_at: string;
+  token_symbol?: string;
+  label?: string;
+};
+
+type CryptoNetwork = {
+  id: string;
+  label: string;
+  token_symbol: string;
+  rate_eur: number;
 };
 
 const Credit = () => {
@@ -30,8 +39,11 @@ const Credit = () => {
   const [loading, setLoading] = useState(false);
   const [cryptoLoading, setCryptoLoading] = useState(false);
   const [cryptoPayment, setCryptoPayment] = useState<CryptoPayment | null>(null);
+  const [networks, setNetworks] = useState<CryptoNetwork[]>([]);
+  const [selectedNetwork, setSelectedNetwork] = useState<string>("");
   const cryptoPaymentRef = useRef<CryptoPayment | null>(null);
   cryptoPaymentRef.current = cryptoPayment;
+
 
   const callCrypto = useCallback(async (body: Record<string, unknown>) => {
     const { data: sessionData } = await supabase.auth.getSession();
