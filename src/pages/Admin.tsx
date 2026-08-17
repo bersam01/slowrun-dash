@@ -176,6 +176,14 @@ const Admin = () => {
     setCryptoNetworks((data ?? []) as CryptoNetworkRow[]);
   };
 
+  const seedNetworks = async () => {
+    const { data, error } = await supabase.functions.invoke("crypto-topup", { body: { action: "seed" } });
+    if (error) return toast.error(error.message);
+    const added = Number((data as { added?: number })?.added ?? 0);
+    toast.success(added ? `${added} crypto(s) ajoutée(s)` : "Toutes les cryptos sont déjà présentes");
+    loadNetworks();
+  };
+
   const saveNetwork = async (id: string, patch: Partial<CryptoNetworkRow>) => {
     const { error } = await supabase
       .from("crypto_networks")
@@ -472,8 +480,13 @@ const Admin = () => {
             <h3 className="font-semibold">Devises crypto affichées sur la page Crédit</h3>
             <p className="mt-1 text-sm text-muted-foreground">
               Active ou désactive chaque réseau. Si aucun n'est activé, la section crypto est masquée pour les utilisateurs.
-              Si un seul est activé, il n'y a pas de sélecteur de devise.
+              Si un seul est activé, il n'y a pas de sélecteur de devise. Une seule adresse suffit par famille de chaîne :
+              une adresse EVM couvre ETH / BNB / Base / Arbitrum / Optimism / Polygon / Avalanche, une adresse Solana couvre SOL + USDC/USDT SPL,
+              une adresse TRON couvre TRX + USDT TRC20. Laisse le taux à 0 pour utiliser le prix live du marché.
             </p>
+            <Button className="mt-3" size="sm" variant="outline" onClick={seedNetworks}>
+              Ajouter toutes les cryptos disponibles
+            </Button>
 
             {cryptoNetworks.length === 0 ? (
               <p className="mt-4 text-sm text-muted-foreground">
@@ -500,7 +513,7 @@ const Admin = () => {
                           className="mt-1"
                           value={networkDraft[n.id]?.address ?? n.address ?? ""}
                           onChange={(e) => setNetworkDraft((p) => ({ ...p, [n.id]: { ...p[n.id], address: e.target.value } }))}
-                          placeholder={n.id === "SOL" ? "Adresse Solana" : "Adresse TRON (T...)"}
+                          placeholder="Adresse de réception (identique pour toute la famille de chaîne)"
                         />
                       </div>
                       <div>
@@ -528,7 +541,7 @@ const Admin = () => {
                       onClick={() => saveNetwork(n.id, {
                         address: networkDraft[n.id]?.address ?? n.address ?? "",
                         contract: networkDraft[n.id]?.contract ?? n.contract ?? "",
-                        rate_eur: Number(networkDraft[n.id]?.rate_eur ?? n.rate_eur) || 1.08,
+                        rate_eur: Number(networkDraft[n.id]?.rate_eur ?? n.rate_eur) || 0,
                       })}
                     >
                       Enregistrer
