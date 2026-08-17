@@ -290,10 +290,49 @@ async function fetchSolanaTransfers(owner: string, mint: string): Promise<Transf
   return transfers;
 }
 
+/** Transferts SOL natifs entrants vers l'adresse du marchand. */
+async function fetchSolanaNativeTransfers(owner: string): Promise<Transfer[]> {
+  const sigs = await solanaRpc("getSignaturesForAddress", [owner, { limit: 25 }, { commitment: "confirmed" }]);
+  const list = Array.isArray(sigs) ? sigs : [];
+  const transfers: Transfer[] = [];
+
+  for (const sig of list) {
+    if (sig?.err) continue;
+    const signature = String(sig?.signature ?? "");
+    if (!signature) continue;
+
+    const tx = await solanaRpc("getTransaction", [
+      signature,
+      { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 },
+    ]);
+    if (!tx?.meta) continue;
+
+    const keys: Array<{ pubkey?: string }> = tx?.transaction?.message?.accountKeys ?? [];
+    const idx = keys.findIndex((k) => String(k?.pubkey ?? k) === owner);
+    if (idx < 0) continue;
+
+    const pre = Number(tx.meta.preBalances?.[idx] ?? 0);
+    const post = Number(tx.meta.postBalances?.[idx] ?? 0);
+    const delta = (post - pre) / 1_000_000_000;
+
+    if (delta > 0) {
+      transfers.push({
+        tx_hash: signature,
+        amount: +delta.toFixed(9),
+        timestamp: Number(tx?.blockTime ?? sig?.blockTime ?? 0) * 1000,
+      });
+    }
+  }
+
+  return transfers;
+}
+
 async function fetchTransfers(network: NetworkConfig): Promise<Transfer[]> {
+  if (isNative(network)) return fetchSolanaNativeTransfers(network.address);
   if (network.id === "SOL") return fetchSolanaTransfers(network.address, network.contract);
   return fetchTronTransfers(network.address, network.contract);
 }
+
 
 /** Rapproche les transferts reçus avec les demandes en attente (matching par montant exact). */
 async function reconcile(admin: Admin, networks: NetworkConfig[]) {
