@@ -82,13 +82,14 @@ const Dashboard = () => {
       }
 
       const [walletRes, purchaseRes, prodRes] = await Promise.all([
-        supabase.from("wallets").select("balance, total_spent, total_credited").eq("user_id", profile.id).maybeSingle(),
+        supabase.from("wallets").select("balance, total_spent, total_credited, overdraft_limit_eur").eq("user_id", profile.id).maybeSingle(),
         supabase.from("purchases").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }).limit(20),
         supabase.from("product_purchases").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }).limit(20),
       ]);
       if (cancelled) return;
       if (walletRes.data) {
         setBalance(Number(walletRes.data.balance ?? 0));
+        setOverdraftLimit(Number(walletRes.data.overdraft_limit_eur ?? 0));
         setTotalSpent(Number(walletRes.data.total_spent ?? 0));
         setTotalCredited(Number(walletRes.data.total_credited ?? 0));
       }
