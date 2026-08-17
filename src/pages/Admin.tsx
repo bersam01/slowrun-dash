@@ -455,7 +455,7 @@ const Admin = () => {
   };
 
   const applyOverdraft = async (userId: string, value: number) => {
-    const { data, error } = await supabase.functions.invoke("super-api", {
+    const { data, error } = await supabase.functions.invoke("admin-set-overdraft", {
       body: { user_id: userId, overdraft_limit_eur: value },
     });
     if (error) return toast.error(error.message);
