@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { roleBadgeStyle } from "@/lib/memberRoles";
 import { Sparkles, LayoutDashboard, ShieldCheck, Package, LogOut, Wallet, Share2 , History, Lock} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useNavVisibility } from "@/hooks/useNavVisibility";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
@@ -73,13 +74,15 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     navigate("/login");
   };
 
+  const visible = (key: string) => isAdmin || !isHidden(key);
+
   const navItems = [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/credit", label: "Créditer", icon: Wallet },
-    { to: "/transactions", label: "Historique", icon: History },
-    { to: "/products", label: "Produits", icon: Package },
-    { to: "/securite", label: "Sécurité", icon: Lock },
-    ...(partnerCheckDone && isPartner && !isAdmin ? [{ to: "/collab", label: "Collab", icon: Share2 }] : []),
+    ...(visible("dashboard") ? [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
+    ...(visible("credit") ? [{ to: "/credit", label: "Créditer", icon: Wallet }] : []),
+    ...(visible("transactions") ? [{ to: "/transactions", label: "Historique", icon: History }] : []),
+    ...(visible("products") ? [{ to: "/products", label: "Produits", icon: Package }] : []),
+    ...(visible("securite") ? [{ to: "/securite", label: "Sécurité", icon: Lock }] : []),
+    ...(partnerCheckDone && isPartner && !isAdmin && visible("collab") ? [{ to: "/collab", label: "Collab", icon: Share2 }] : []),
     ...(isAdmin ? [{ to: "/admin", label: "Admin", icon: ShieldCheck }] : []),
   ];
 
