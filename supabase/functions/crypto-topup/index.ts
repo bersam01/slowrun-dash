@@ -98,7 +98,9 @@ async function loadNetworks(admin: Admin): Promise<NetworkConfig[]> {
 
 /** Prix live d'un token natif (EUR) -> nombre de tokens pour 1 €. */
 async function liveRateEur(network: NetworkConfig): Promise<number> {
-  if (Number(network.rate_eur) > 0) return Number(network.rate_eur);
+  // Pour un token natif (SOL/TRX) on ignore toujours le taux fixe stocké:
+  // le prix bouge, on prend le live. Le taux fixe ne sert qu'aux stablecoins.
+  if (!isNativeNetwork(network) && Number(network.rate_eur) > 0) return Number(network.rate_eur);
   const ids: Record<string, string> = { SOLNATIVE: "solana", TRXNATIVE: "tron" };
   const coin = ids[network.id] ?? "solana";
   const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin}&vs_currencies=eur`);
