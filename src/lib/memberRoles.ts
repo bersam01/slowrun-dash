@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 export interface MemberRole {
   id: string;
   name: string;
@@ -38,7 +40,7 @@ export const ROLE_GRADIENT_PALETTE = [
 export const isGradientColor = (color: string) => color?.startsWith("linear-gradient");
 
 /** Style CSS d'un badge de rôle (supporte couleur unie ou dégradé). */
-export const roleBadgeStyle = (color?: string | null): React.CSSProperties => ({
+export const roleBadgeStyle = (color?: string | null): CSSProperties => ({
   background: color || DEFAULT_ROLE_COLOR,
   color: "#fff",
 });
