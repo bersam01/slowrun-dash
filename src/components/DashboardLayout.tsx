@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { Badge } from "@/components/ui/badge";
-import { LayoutDashboard, ShieldCheck, Package, LogOut, Wallet, Sparkles, Share2 , History} from "lucide-react";
+import { LayoutDashboard, ShieldCheck, Package, LogOut, Wallet, Share2 , History} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
