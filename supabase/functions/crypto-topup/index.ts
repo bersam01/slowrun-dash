@@ -379,13 +379,15 @@ async function reconcile(admin: Admin, networks: NetworkConfig[]) {
 
     const expected = Number(request.amount_usdt);
     const createdAt = new Date(request.created_at as string).getTime() - 10 * 60 * 1000;
+    const tolerance = isNative(network) ? 0.00005 : 0.005;
 
     const match = transfers.find((tx) =>
       !usedHashes.has(tx.tx_hash) &&
       tx.timestamp >= createdAt &&
-      Math.abs(tx.amount - expected) < 0.005
+      Math.abs(tx.amount - expected) < tolerance
     );
     if (!match) continue;
+
 
     usedHashes.add(match.tx_hash);
 
