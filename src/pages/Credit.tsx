@@ -24,6 +24,7 @@ type CryptoPayment = {
   expires_at: string;
   token_symbol?: string;
   label?: string;
+  decimals?: number;
 };
 
 type CryptoNetwork = {
@@ -31,7 +32,9 @@ type CryptoNetwork = {
   label: string;
   token_symbol: string;
   rate_eur: number;
+  decimals?: number;
 };
+
 
 const Credit = () => {
   const { profile } = useAuth();
