@@ -155,6 +155,28 @@ const Admin = () => {
   const [overdraftDraft, setOverdraftDraft] = useState<Record<string, string>>({});
   const [selectedPurchase, setSelectedPurchase] = useState<PurchaseRow | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<{ id: string; product_name: string; quantity: number; total_eur: number; price_eur: number; status: string; created_at: string } | null>(null);
+  const [cryptoNetworks, setCryptoNetworks] = useState<CryptoNetworkRow[]>([]);
+  const [networkDraft, setNetworkDraft] = useState<Record<string, { address?: string; contract?: string; rate_eur?: string }>>({});
+
+  const loadNetworks = async () => {
+    const { data } = await supabase
+      .from("crypto_networks")
+      .select("id, label, token_symbol, address, contract, rate_eur, enabled, sort_order")
+      .order("sort_order", { ascending: true });
+    setCryptoNetworks((data ?? []) as CryptoNetworkRow[]);
+  };
+
+  const saveNetwork = async (id: string, patch: Partial<CryptoNetworkRow>) => {
+    const { error } = await supabase
+      .from("crypto_networks")
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Réseau mis à jour");
+    loadNetworks();
+  };
+
+
 
   const load = async () => {
     const [u, c, p, pu, pr, w, rf, sc] = await Promise.all([
