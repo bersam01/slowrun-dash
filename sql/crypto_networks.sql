@@ -34,3 +34,11 @@ values
   ('TRC20', 'USDT · TRON (TRC20)', 'USDT', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', 1.08, true, 1),
   ('SOL',   'USDC · Solana (SPL)', 'USDC', 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 1.08, false, 2)
 on conflict (id) do nothing;
+
+-- SOL natif (pas de token) : rate_eur = 0 => prix live CoinGecko (+2% de marge)
+insert into public.crypto_networks (id, label, token_symbol, contract, rate_eur, enabled, sort_order)
+values ('SOLNATIVE', 'SOL · Solana', 'SOL', 'native', 0, true, 3)
+on conflict (id) do update
+  set label = excluded.label,
+      token_symbol = excluded.token_symbol,
+      contract = 'native';
