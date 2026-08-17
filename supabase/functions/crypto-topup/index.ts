@@ -381,14 +381,30 @@ async function reconcile(admin: Admin, networks: NetworkConfig[]) {
 
     const expected = Number(request.amount_usdt);
     const createdAt = new Date(request.created_at as string).getTime() - 10 * 60 * 1000;
-    const tolerance = isNative(network) ? 0.00005 : 0.005;
+    // Tolérance : les natifs bougent en prix + arrondis wallet → marge relative
+    const tolerance = isNative(network)
+      ? Math.max(0.0005, expected * 0.015)
+      : Math.max(0.005, expected * 0.005);
 
-    const match = transfers.find((tx) =>
+    const candidates = transfers.filter((tx) =>
       !usedHashes.has(tx.tx_hash) &&
       tx.timestamp >= createdAt &&
       Math.abs(tx.amount - expected) < tolerance
     );
-    if (!match) continue;
+    // on prend le plus proche du montant attendu
+    candidates.sort((a, b) => Math.abs(a.amount - expected) - Math.abs(b.amount - expected));
+    const match = candidates[0];
+    if (!match) {
+      console.log("no match", {
+        request: request.id,
+        network: networkId,
+        expected,
+        tolerance,
+        seen: transfers.map((t) => ({ a: t.amount, t: t.timestamp })),
+      });
+      continue;
+    }
+
 
 
     usedHashes.add(match.tx_hash);
