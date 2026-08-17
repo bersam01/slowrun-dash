@@ -641,9 +641,15 @@ const Admin = () => {
                     <div className="mt-1 text-xs">
                       <span className="font-semibold text-primary">Solde : {Number(w?.balance ?? 0).toFixed(2)} q</span>
                       <span className="ml-2 text-muted-foreground">(crédité {Number(w?.total_credited ?? 0).toFixed(2)} • dépensé {Number(w?.total_spent ?? 0).toFixed(2)})</span>
-                      {Number(w?.overdraft_limit_eur ?? 0) > 0 && (
+                      {Number(w?.overdraft_limit_eur ?? 0) >= UNLIMITED_OVERDRAFT ? (
+                        <span className="ml-2 text-warning">• découvert illimité</span>
+                      ) : Number(w?.overdraft_limit_eur ?? 0) > 0 ? (
                         <span className="ml-2 text-warning">• découvert {Number(w?.overdraft_limit_eur).toFixed(2)} €</span>
+                      ) : null}
+                      {Number(w?.balance ?? 0) < 0 && (
+                        <span className="ml-2 text-destructive">• doit créditer {Math.abs(Number(w?.balance ?? 0)).toFixed(2)} €</span>
                       )}
+
                     </div>
                   </div>
                 </div>
