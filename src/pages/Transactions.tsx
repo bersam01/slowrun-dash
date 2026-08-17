@@ -61,12 +61,6 @@ const kindMeta: Record<Kind, { label: string; Icon: typeof CreditCard }> = {
   manual: { label: "Demande manuelle", Icon: Clock },
 };
 
-const explorerUrl = (network: string | null | undefined, hash: string) => {
-  if (!hash) return null;
-  if (network === "TRC20") return `https://tronscan.org/#/transaction/${hash}`;
-  return `https://solscan.io/tx/${hash}`;
-};
-
 const Transactions = () => {
   const { profile, loading: authLoading } = useAuth();
   const [items, setItems] = useState<Tx[]>([]);
