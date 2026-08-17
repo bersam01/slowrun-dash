@@ -601,6 +601,17 @@ const Admin = () => {
                   className="h-9 w-48"
                 />
                 <div className="flex flex-wrap items-center gap-1">
+                  {ROLE_GRADIENT_PALETTE.map((g) => (
+                    <button
+                      key={g.value}
+                      type="button"
+                      title={g.label}
+                      aria-label={`Dégradé ${g.label}`}
+                      onClick={() => setNewRoleColor(g.value)}
+                      className={`h-6 w-9 rounded-md border-2 transition ${newRoleColor === g.value ? "border-foreground" : "border-transparent"}`}
+                      style={{ background: g.value }}
+                    />
+                  ))}
                   {ROLE_COLOR_PALETTE.map((c) => (
                     <button
                       key={c}
@@ -613,11 +624,12 @@ const Admin = () => {
                   ))}
                   <Input
                     type="color"
-                    value={newRoleColor}
+                    value={isGradientColor(newRoleColor) ? "#7c3aed" : newRoleColor}
                     onChange={(e) => setNewRoleColor(e.target.value)}
                     className="h-7 w-10 cursor-pointer p-1"
                   />
                 </div>
+
                 <Button size="sm" onClick={createRole}><Plus className="mr-1 h-4 w-4" />Créer</Button>
               </div>
             </div>
