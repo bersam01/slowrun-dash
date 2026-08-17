@@ -28,6 +28,14 @@ type NetworkConfig = {
   sort_order: number;
 };
 
+/** true si le réseau reçoit la crypto native (SOL) et non un token. */
+const isNative = (n: { id: string; contract?: string | null }) =>
+  String(n.contract ?? "").trim().toLowerCase() === "native" || n.id === "SOLNATIVE";
+
+/** décimales utilisées pour rendre le montant unique (matching). */
+const tokenDecimals = (n: NetworkConfig) => (isNative(n) ? 4 : 2);
+
+
 type Transfer = { tx_hash: string; amount: number; timestamp: number };
 
 /** Config des réseaux : table crypto_networks si dispo, sinon fallback env (TRON). */
