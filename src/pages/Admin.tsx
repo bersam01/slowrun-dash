@@ -543,7 +543,6 @@ const Admin = () => {
           <TabsTrigger value="payments">Paiements</TabsTrigger>
           <TabsTrigger value="purchases"><ShoppingCart className="mr-1 h-4 w-4" />Achats</TabsTrigger>
           <TabsTrigger value="accounting"><Calculator className="mr-1 h-4 w-4" />Comptabilité</TabsTrigger>
-          <TabsTrigger value="share"><Share2 className="mr-1 h-4 w-4" />Partage</TabsTrigger>
           <TabsTrigger value="roles"><Crown className="mr-1 h-4 w-4" />Rôles</TabsTrigger>
           <TabsTrigger value="crypto"><Bitcoin className="mr-1 h-4 w-4" />Crypto</TabsTrigger>
         </TabsList>
