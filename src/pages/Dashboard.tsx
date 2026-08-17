@@ -167,6 +167,32 @@ const Dashboard = () => {
         />
       </div>
 
+      {!isLoading && overdraftLimit > 0 && (
+        <Alert className="mt-5 border-primary/30 bg-primary/10">
+          <ShieldCheck className="h-4 w-4 text-primary" />
+          <AlertTitle>
+            {overdraftLimit >= UNLIMITED_OVERDRAFT
+              ? "Découvert illimité activé"
+              : `Découvert autorisé : ${overdraftLimit.toFixed(2)} €`}
+          </AlertTitle>
+          <AlertDescription>
+            {overdraftLimit >= UNLIMITED_OVERDRAFT
+              ? "Tu peux continuer à acheter même si ton solde passe en négatif."
+              : `Tu peux dépenser jusqu'à ${overdraftLimit.toFixed(2)} € au-delà de ton solde actuel.`}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!isLoading && balance < 0 && (
+        <Alert variant="destructive" className="mt-5">
+          <Shield className="h-4 w-4" />
+          <AlertTitle>Solde négatif</AlertTitle>
+          <AlertDescription>
+            Tu dois créditer {Math.abs(balance).toFixed(2)} € pour revenir à un solde positif.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
         <Card className="glass-card lg:col-span-2 p-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
