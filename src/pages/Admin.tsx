@@ -32,7 +32,6 @@ interface AdminProfile {
   avatar_url: string | null;
   status: string;
   is_admin: boolean;
-  member_tag: string | null;
   created_at: string;
 }
 interface CreditReq {
@@ -384,14 +383,6 @@ const Admin = () => {
     load();
   };
 
-  const toggleMemberTag = async (userId: string, currentTag: string | null) => {
-    const newTag = currentTag === "MY-MY" ? null : "MY-MY";
-    const { error } = await supabase.from("profiles").update({ member_tag: newTag }).eq("id", userId);
-    if (error) return toast.error(error.message);
-    toast.success(newTag ? "Tag MY-MY ajouté" : "Tag MY-MY retiré");
-    load();
-  };
-
   const deleteRefund = async (id: string) => {
     if (!confirm("Supprimer cette ligne ?")) return;
     const { error } = await supabase.from("refunds").delete().eq("id", id);
@@ -659,7 +650,7 @@ const Admin = () => {
                 <div className="flex items-center gap-3">
                   {u.avatar_url && <img src={u.avatar_url} className="h-10 w-10 rounded-full" alt="" />}
                   <div>
-                    <div className="font-medium">{u.display_name ?? "—"} {u.is_admin && <Badge className="ml-1 bg-accent text-accent-foreground">Admin</Badge>} {u.member_tag && <Badge className="ml-1 bg-primary text-primary-foreground">{u.member_tag}</Badge>}</div>
+                    <div className="font-medium">{u.display_name ?? "—"} {u.is_admin && <Badge className="ml-1 bg-accent text-accent-foreground">Admin</Badge>}</div>
                     <div className="text-xs text-muted-foreground">Discord: {u.discord_id ?? "—"}</div>
                     <div className="mt-1 text-xs">
                       <span className="font-semibold text-primary">Solde : {Number(w?.balance ?? 0).toFixed(2)} q</span>
@@ -719,9 +710,6 @@ const Admin = () => {
 
                   <Button size="sm" variant="outline" onClick={() => openHistory(u)}>
                     <History className="mr-1 h-4 w-4" />Voir achats
-                  </Button>
-                  <Button size="sm" variant={u.member_tag === "MY-MY" ? "destructive" : "outline"} onClick={() => toggleMemberTag(u.id, u.member_tag)}>
-                    {u.member_tag === "MY-MY" ? "Retirer MY-MY" : "+ MY-MY"}
                   </Button>
                   {!u.is_admin && u.status === "approved" && (
                     <Button
