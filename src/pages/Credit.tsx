@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CreditCard, Sparkles, Info } from "lucide-react";
+import { CreditCard, Sparkles, Info, Bitcoin, Copy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,11 +12,124 @@ import { useAuth } from "@/hooks/useAuth";
 const PRESETS = [10, 25, 50, 100, 250, 500];
 const STRIPE_SYNC_MAX_ATTEMPTS = 10;
 const STRIPE_SYNC_RETRY_MS = 2000;
+const CRYPTO_POLL_MS = 15000;
+
+type CryptoPayment = {
+  id: string;
+  amount_eur: number;
+  amount_usdt: number;
+  address: string;
+  network: string;
+  status: string;
+  expires_at: string;
+};
 
 const Credit = () => {
   const { profile } = useAuth();
   const [amount, setAmount] = useState<number>(50);
   const [loading, setLoading] = useState(false);
+  const [cryptoLoading, setCryptoLoading] = useState(false);
+  const [cryptoPayment, setCryptoPayment] = useState<CryptoPayment | null>(null);
+  const cryptoPaymentRef = useRef<CryptoPayment | null>(null);
+  cryptoPaymentRef.current = cryptoPayment;
+
+  const callCrypto = useCallback(async (body: Record<string, unknown>) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) throw new Error("Ta session a expiré, reconnecte-toi.");
+
+    const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/crypto-topup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error ?? `Erreur ${response.status}`);
+    return payload;
+  }, []);
+
+  const handleCryptoCreate = async () => {
+    if (amount < 1) {
+      toast.error("Le montant minimum est de 1 €.");
+      return;
+    }
+    setCryptoLoading(true);
+    try {
+      const payload = await callCrypto({ action: "create", amount });
+      setCryptoPayment(payload.payment as CryptoPayment);
+      toast.success("Adresse de paiement générée", {
+        description: "Envoie le montant EXACT en USDT (TRC20).",
+      });
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setCryptoLoading(false);
+    }
+  };
+
+  const handleCryptoCancel = async () => {
+    const current = cryptoPaymentRef.current;
+    if (!current) return;
+    try {
+      await callCrypto({ action: "cancel", id: current.id });
+    } catch {
+      // best effort
+    }
+    setCryptoPayment(null);
+  };
+
+  // Polling automatique: détecte le virement USDT et crédite le solde
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const payload = await callCrypto({ action: "check" });
+        if (cancelled) return;
+
+        const pending = (payload?.pending ?? null) as CryptoPayment | null;
+        const current = cryptoPaymentRef.current;
+
+        if (current && !pending) {
+          setCryptoPayment(null);
+          const lastPaid = payload?.last_paid;
+          if (lastPaid) {
+            toast.success("🪙 Paiement USDT reçu !", {
+              description: `${Number(lastPaid.amount_eur ?? 0).toFixed(2)} € ont été ajoutés à ton solde.`,
+              duration: 8000,
+            });
+          }
+        } else if (!current && pending) {
+          setCryptoPayment(pending);
+        }
+      } catch {
+        // silencieux
+      }
+    };
+
+    void tick();
+    const interval = window.setInterval(tick, CRYPTO_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [profile?.id, callCrypto]);
+
+  const copyToClipboard = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copié`);
+    } catch {
+      toast.error("Impossible de copier");
+    }
+  };
+
 
    useEffect(() => {
     let cancelled = false;
