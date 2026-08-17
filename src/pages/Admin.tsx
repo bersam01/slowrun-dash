@@ -108,7 +108,10 @@ interface RefundRow {
   created_at: string;
 }
 
+const UNLIMITED_OVERDRAFT = 1000000;
+
 const normalizeBotName = (value: string | null | undefined) =>
+
   String(value ?? "")
     .normalize("NFKD")
     .replace(/[•·].*$/u, "")
@@ -451,19 +454,32 @@ const Admin = () => {
     load();
   };
 
-  const saveOverdraft = async (userId: string) => {
-    const raw = overdraftDraft[userId];
-    const value = Number(raw);
-    if (!Number.isFinite(value) || value < 0) return toast.error("Valeur invalide (≥ 0)");
+  const applyOverdraft = async (userId: string, value: number) => {
     const { data, error } = await supabase.functions.invoke("super-api", {
       body: { user_id: userId, overdraft_limit_eur: value },
     });
     if (error) return toast.error(error.message);
     if (data?.error) return toast.error(data.error);
-    toast.success(`Découvert défini à ${value.toFixed(2)} €`);
+    toast.success(
+      value >= UNLIMITED_OVERDRAFT
+        ? "Découvert illimité activé"
+        : `Découvert défini à ${value.toFixed(2)} €`
+    );
     setOverdraftDraft((s) => ({ ...s, [userId]: "" }));
     load();
   };
+
+  const saveOverdraft = async (userId: string) => {
+    const raw = overdraftDraft[userId];
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) return toast.error("Valeur invalide (≥ 0)");
+    await applyOverdraft(userId, value);
+  };
+
+  const toggleUnlimitedOverdraft = async (userId: string, next: boolean) => {
+    await applyOverdraft(userId, next ? UNLIMITED_OVERDRAFT : 0);
+  };
+
   const pending = users.filter((u) => u.status === "pending");
   const rejectedUsers = users.filter((u) => u.status === "rejected");
   const refundPreview = (() => {
@@ -625,9 +641,15 @@ const Admin = () => {
                     <div className="mt-1 text-xs">
                       <span className="font-semibold text-primary">Solde : {Number(w?.balance ?? 0).toFixed(2)} q</span>
                       <span className="ml-2 text-muted-foreground">(crédité {Number(w?.total_credited ?? 0).toFixed(2)} • dépensé {Number(w?.total_spent ?? 0).toFixed(2)})</span>
-                      {Number(w?.overdraft_limit_eur ?? 0) > 0 && (
+                      {Number(w?.overdraft_limit_eur ?? 0) >= UNLIMITED_OVERDRAFT ? (
+                        <span className="ml-2 text-warning">• découvert illimité</span>
+                      ) : Number(w?.overdraft_limit_eur ?? 0) > 0 ? (
                         <span className="ml-2 text-warning">• découvert {Number(w?.overdraft_limit_eur).toFixed(2)} €</span>
+                      ) : null}
+                      {Number(w?.balance ?? 0) < 0 && (
+                        <span className="ml-2 text-destructive">• doit créditer {Math.abs(Number(w?.balance ?? 0)).toFixed(2)} €</span>
                       )}
+
                     </div>
                   </div>
                 </div>
@@ -646,20 +668,32 @@ const Admin = () => {
                   <Button size="sm" variant="destructive" onClick={() => adjustCredit(u.id, -1)}>
                     <Minus className="mr-1 h-4 w-4" />Retirer
                   </Button>
-                  <div className="flex items-center gap-1 rounded-md border border-border/60 px-2 py-1">
+                  <div className="flex items-center gap-2 rounded-md border border-border/60 px-2 py-1">
                     <AlertCircle className="h-3.5 w-3.5 text-warning" />
                     <span className="text-xs text-muted-foreground">Découvert</span>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      placeholder={Number(w?.overdraft_limit_eur ?? 0).toFixed(2)}
-                      value={overdraftDraft[u.id] ?? ""}
-                      onChange={(e) => setOverdraftDraft((s) => ({ ...s, [u.id]: e.target.value }))}
-                      className="h-7 w-20 text-xs"
-                    />
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => saveOverdraft(u.id)}>OK</Button>
+                    {Number(w?.overdraft_limit_eur ?? 0) < UNLIMITED_OVERDRAFT && (
+                      <>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          placeholder={Number(w?.overdraft_limit_eur ?? 0).toFixed(2)}
+                          value={overdraftDraft[u.id] ?? ""}
+                          onChange={(e) => setOverdraftDraft((s) => ({ ...s, [u.id]: e.target.value }))}
+                          className="h-7 w-20 text-xs"
+                        />
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => saveOverdraft(u.id)}>OK</Button>
+                      </>
+                    )}
+                    <div className="flex items-center gap-1 border-l border-border/60 pl-2">
+                      <Switch
+                        checked={Number(w?.overdraft_limit_eur ?? 0) >= UNLIMITED_OVERDRAFT}
+                        onCheckedChange={(v) => toggleUnlimitedOverdraft(u.id, v)}
+                      />
+                      <span className="text-xs text-muted-foreground">Illimité</span>
+                    </div>
                   </div>
+
                   <Button size="sm" variant="outline" onClick={() => openHistory(u)}>
                     <History className="mr-1 h-4 w-4" />Voir achats
                   </Button>
