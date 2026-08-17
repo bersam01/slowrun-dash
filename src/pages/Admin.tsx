@@ -32,6 +32,7 @@ interface AdminProfile {
   avatar_url: string | null;
   status: string;
   is_admin: boolean;
+  member_tag: string | null;
   created_at: string;
 }
 interface CreditReq {
@@ -383,6 +384,14 @@ const Admin = () => {
     load();
   };
 
+  const toggleVip = async (userId: string, currentTag: string | null) => {
+    const newTag = currentTag === "VIP" ? null : "VIP";
+    const { error } = await supabase.from("profiles").update({ member_tag: newTag }).eq("id", userId);
+    if (error) return toast.error(error.message);
+    toast.success(newTag ? "Rôle VIP ajouté" : "Rôle VIP retiré");
+    load();
+  };
+
   const deleteRefund = async (id: string) => {
     if (!confirm("Supprimer cette ligne ?")) return;
     const { error } = await supabase.from("refunds").delete().eq("id", id);
@@ -650,7 +659,7 @@ const Admin = () => {
                 <div className="flex items-center gap-3">
                   {u.avatar_url && <img src={u.avatar_url} className="h-10 w-10 rounded-full" alt="" />}
                   <div>
-                    <div className="font-medium">{u.display_name ?? "—"} {u.is_admin && <Badge className="ml-1 bg-accent text-accent-foreground">Admin</Badge>}</div>
+                    <div className="font-medium">{u.display_name ?? "—"} {u.is_admin && <Badge className="ml-1 bg-accent text-accent-foreground">Admin</Badge>} {u.member_tag === "VIP" && <Badge className="ml-1 bg-gradient-to-r from-primary to-accent text-primary-foreground">VIP</Badge>}</div>
                     <div className="text-xs text-muted-foreground">Discord: {u.discord_id ?? "—"}</div>
                     <div className="mt-1 text-xs">
                       <span className="font-semibold text-primary">Solde : {Number(w?.balance ?? 0).toFixed(2)} q</span>
@@ -708,6 +717,9 @@ const Admin = () => {
                     </div>
                   </div>
 
+                  <Button size="sm" variant={u.member_tag === "VIP" ? "destructive" : "outline"} onClick={() => toggleVip(u.id, u.member_tag)}>
+                    {u.member_tag === "VIP" ? "Retirer VIP" : "+ VIP"}
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => openHistory(u)}>
                     <History className="mr-1 h-4 w-4" />Voir achats
                   </Button>
