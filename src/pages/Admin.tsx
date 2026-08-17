@@ -426,30 +426,6 @@ const Admin = () => {
     if (error) toast.error(error.message); else load();
   };
 
-  const saveShareConfig = async () => {
-    const payload = {
-      id: true,
-      bot_name: shareConfigDraft.bot_name?.trim() || null,
-      partner_user_id: shareConfigDraft.partner_user_id || null,
-      share_pct: Number(shareConfigDraft.share_pct) || 50,
-      updated_at: new Date().toISOString(),
-    };
-    const { error } = await supabase.from("revenue_share_config").upsert(payload, { onConflict: "id" });
-    if (error) return toast.error(error.message);
-    toast.success("Config partage sauvegardée");
-    load();
-  };
-
-  const assignPurchaseToTrackedBot = async (purchaseId: string) => {
-    if (!shareConfig.bot_name) return toast.error("Configure d'abord le bot suivi dans l'onglet Partage");
-    const { error } = await supabase.functions.invoke("admin-tag-purchase-bot", {
-      body: { purchase_id: purchaseId, source_bot: shareConfig.bot_name },
-    });
-    if (error) return toast.error(error.message);
-    toast.success("Panier ajouté au partage");
-    load();
-  };
-
   const openHistory = async (user: AdminProfile) => {
     setHistoryUser(user);
     setHistoryLoading(true);
