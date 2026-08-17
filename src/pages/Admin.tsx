@@ -108,7 +108,10 @@ interface RefundRow {
   created_at: string;
 }
 
+const UNLIMITED_OVERDRAFT = 1000000;
+
 const normalizeBotName = (value: string | null | undefined) =>
+
   String(value ?? "")
     .normalize("NFKD")
     .replace(/[•·].*$/u, "")
