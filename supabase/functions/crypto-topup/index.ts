@@ -1,6 +1,7 @@
-// crypto-topup: rechargement en USDT (TRC20) 100% maison
-// - action "create": crée une demande avec un montant USDT UNIQUE (centimes uniques) -> permet d'identifier le payeur
-// - action "check" : interroge TronGrid, matche les transferts reçus sur l'adresse, crédite le wallet
+// crypto-topup: rechargement crypto 100% maison (USDT TRC20 + USDC/USDT Solana)
+// - action "networks": renvoie les réseaux activés (configurés dans le panel admin)
+// - action "create"  : crée une demande avec un montant token UNIQUE (centimes uniques) -> identifie le payeur
+// - action "check"   : interroge la blockchain, matche les transferts reçus, crédite le wallet
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -16,11 +17,85 @@ const json = (body: unknown, status = 200) =>
   });
 
 const USDT_TRC20_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+const USDC_SPL_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const EXPIRY_MINUTES = 60;
 
 type Admin = ReturnType<typeof createClient>;
 
-async function notifyDiscord(admin: Admin, userId: string, amountEur: number, amountUsdt: number, newBalance: number, txHash: string) {
+type NetworkConfig = {
+  id: string;
+  label: string;
+  token_symbol: string;
+  address: string;
+  contract: string;
+  rate_eur: number;
+  enabled: boolean;
+  sort_order: number;
+};
+
+type Transfer = { tx_hash: string; amount: number; timestamp: number };
+
+/** Config des réseaux : table crypto_networks si dispo, sinon fallback env (TRON). */
+async function loadNetworks(admin: Admin): Promise<NetworkConfig[]> {
+  const { data, error } = await admin
+    .from("crypto_networks")
+    .select("id, label, token_symbol, address, contract, rate_eur, enabled, sort_order")
+    .order("sort_order", { ascending: true });
+
+  if (!error && data?.length) {
+    return (data as NetworkConfig[]).map((n) => ({
+      ...n,
+      address: String(n.address ?? "").trim() ||
+        (n.id === "TRC20"
+          ? (Deno.env.get("TRON_USDT_ADDRESS") ?? "").trim()
+          : (Deno.env.get("SOLANA_ADDRESS") ?? "").trim()),
+      contract: String(n.contract ?? "").trim() || (n.id === "TRC20" ? USDT_TRC20_CONTRACT : USDC_SPL_MINT),
+      rate_eur: Number(n.rate_eur) > 0 ? Number(n.rate_eur) : 1.08,
+    }));
+  }
+
+  const fallbackRate = Number(Deno.env.get("CRYPTO_EUR_USDT_RATE") ?? "1.08");
+  const tronAddress = (Deno.env.get("TRON_USDT_ADDRESS") ?? "").trim();
+  const solAddress = (Deno.env.get("SOLANA_ADDRESS") ?? "").trim();
+  return [
+    {
+      id: "TRC20",
+      label: "USDT · TRON (TRC20)",
+      token_symbol: "USDT",
+      address: tronAddress,
+      contract: USDT_TRC20_CONTRACT,
+      rate_eur: Number.isFinite(fallbackRate) && fallbackRate > 0 ? fallbackRate : 1.08,
+      enabled: Boolean(tronAddress),
+      sort_order: 1,
+    },
+    {
+      id: "SOL",
+      label: "USDC · Solana (SPL)",
+      token_symbol: "USDC",
+      address: solAddress,
+      contract: USDC_SPL_MINT,
+      rate_eur: Number.isFinite(fallbackRate) && fallbackRate > 0 ? fallbackRate : 1.08,
+      enabled: Boolean(solAddress),
+      sort_order: 2,
+    },
+  ];
+}
+
+const publicNetworks = (networks: NetworkConfig[]) =>
+  networks
+    .filter((n) => n.enabled && n.address)
+    .map((n) => ({ id: n.id, label: n.label, token_symbol: n.token_symbol, rate_eur: n.rate_eur }));
+
+async function notifyDiscord(
+  admin: Admin,
+  userId: string,
+  amountEur: number,
+  amountToken: number,
+  symbol: string,
+  network: string,
+  newBalance: number,
+  txHash: string,
+) {
   const webhook = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
   if (!webhook) return;
   try {
@@ -35,12 +110,12 @@ async function notifyDiscord(admin: Admin, userId: string, amountEur: number, am
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         embeds: [{
-          title: "🪙 Nouveau topup (USDT TRC20)",
+          title: `🪙 Nouveau topup (${symbol} ${network})`,
           color: 0x14b8a6,
           fields: [
             { name: "Utilisateur", value: String(profile?.display_name ?? "—"), inline: true },
             { name: "Discord ID", value: String(profile?.discord_id ?? "—"), inline: true },
-            { name: "Montant", value: `**${amountEur.toFixed(2)} €** (${amountUsdt.toFixed(2)} USDT)`, inline: true },
+            { name: "Montant", value: `**${amountEur.toFixed(2)} €** (${amountToken.toFixed(2)} ${symbol})`, inline: true },
             { name: "Nouveau solde", value: `${newBalance.toFixed(2)} €`, inline: true },
             { name: "Tx", value: txHash, inline: false },
           ],
@@ -81,12 +156,12 @@ async function creditWallet(admin: Admin, userId: string, amountEur: number) {
   return newBalance;
 }
 
-async function fetchTronTransfers(address: string) {
+async function fetchTronTransfers(address: string, contract: string): Promise<Transfer[]> {
   const url = new URL(`https://api.trongrid.io/v1/accounts/${address}/transactions/trc20`);
   url.searchParams.set("limit", "100");
   url.searchParams.set("only_confirmed", "true");
   url.searchParams.set("only_to", "true");
-  url.searchParams.set("contract_address", USDT_TRC20_CONTRACT);
+  url.searchParams.set("contract_address", contract);
 
   const headers: Record<string, string> = {};
   const apiKey = Deno.env.get("TRONGRID_API_KEY");
@@ -108,14 +183,86 @@ async function fetchTronTransfers(address: string) {
         timestamp: Number(row?.block_timestamp ?? 0),
       };
     })
-    .filter((tx: { tx_hash: string }) => Boolean(tx.tx_hash));
+    .filter((tx: Transfer) => Boolean(tx.tx_hash));
+}
+
+async function solanaRpc(method: string, params: unknown[]) {
+  const rpc = Deno.env.get("SOLANA_RPC_URL")?.trim() || "https://api.mainnet-beta.solana.com";
+  const res = await fetch(rpc, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  if (!res.ok) throw new Error(`Solana RPC ${res.status}`);
+  const payload = await res.json();
+  if (payload?.error) throw new Error(`Solana RPC: ${payload.error?.message ?? "error"}`);
+  return payload?.result;
+}
+
+/** Transferts SPL entrants (mint donné) vers l'adresse Solana du marchand. */
+async function fetchSolanaTransfers(owner: string, mint: string): Promise<Transfer[]> {
+  const accounts = await solanaRpc("getTokenAccountsByOwner", [
+    owner,
+    { mint },
+    { encoding: "jsonParsed", commitment: "confirmed" },
+  ]);
+  const atas: string[] = (accounts?.value ?? []).map((a: { pubkey: string }) => a.pubkey);
+  if (!atas.length) return [];
+
+  const transfers: Transfer[] = [];
+
+  for (const ata of atas) {
+    const sigs = await solanaRpc("getSignaturesForAddress", [ata, { limit: 25 }, { commitment: "confirmed" }]);
+    const list = Array.isArray(sigs) ? sigs : [];
+
+    for (const sig of list) {
+      if (sig?.err) continue;
+      const signature = String(sig?.signature ?? "");
+      if (!signature) continue;
+
+      const tx = await solanaRpc("getTransaction", [
+        signature,
+        { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 },
+      ]);
+      if (!tx?.meta) continue;
+
+      const pick = (rows: Array<Record<string, unknown>> | undefined) =>
+        (rows ?? []).filter((b) => String(b?.mint ?? "") === mint && String(b?.owner ?? "") === owner);
+
+      const pre = pick(tx.meta.preTokenBalances);
+      const post = pick(tx.meta.postTokenBalances);
+
+      let delta = 0;
+      for (const p of post) {
+        const idx = Number(p?.accountIndex ?? -1);
+        const before = pre.find((b) => Number(b?.accountIndex ?? -2) === idx);
+        const postAmount = Number((p as { uiTokenAmount?: { uiAmount?: number } })?.uiTokenAmount?.uiAmount ?? 0);
+        const preAmount = Number((before as { uiTokenAmount?: { uiAmount?: number } } | undefined)?.uiTokenAmount?.uiAmount ?? 0);
+        delta += postAmount - preAmount;
+      }
+
+      if (delta > 0) {
+        transfers.push({
+          tx_hash: signature,
+          amount: +delta.toFixed(6),
+          timestamp: Number(tx?.blockTime ?? sig?.blockTime ?? 0) * 1000,
+        });
+      }
+    }
+  }
+
+  return transfers;
+}
+
+async function fetchTransfers(network: NetworkConfig): Promise<Transfer[]> {
+  if (network.id === "SOL") return fetchSolanaTransfers(network.address, network.contract);
+  return fetchTronTransfers(network.address, network.contract);
 }
 
 /** Rapproche les transferts reçus avec les demandes en attente (matching par montant exact). */
-async function reconcile(admin: Admin, address: string) {
+async function reconcile(admin: Admin, networks: NetworkConfig[]) {
   const nowIso = new Date().toISOString();
 
-  // expire les vieilles demandes
   await admin
     .from("crypto_payments")
     .update({ status: "expired" })
@@ -124,14 +271,11 @@ async function reconcile(admin: Admin, address: string) {
 
   const { data: pending } = await admin
     .from("crypto_payments")
-    .select("id, user_id, amount_eur, amount_usdt, created_at")
+    .select("id, user_id, amount_eur, amount_usdt, network, created_at")
     .eq("status", "pending")
     .order("created_at", { ascending: true });
 
   if (!pending?.length) return [];
-
-  const transfers = await fetchTronTransfers(address);
-  if (!transfers.length) return [];
 
   const { data: usedRows } = await admin
     .from("crypto_payments")
@@ -140,12 +284,28 @@ async function reconcile(admin: Admin, address: string) {
   const usedHashes = new Set((usedRows ?? []).map((r: { tx_hash: string | null }) => r.tx_hash));
 
   const credited: Array<{ id: string; amount_eur: number; tx_hash: string }> = [];
+  const cache = new Map<string, Transfer[]>();
 
   for (const request of pending) {
+    const networkId = String(request.network ?? "TRC20");
+    const network = networks.find((n) => n.id === networkId && n.address);
+    if (!network) continue;
+
+    if (!cache.has(networkId)) {
+      try {
+        cache.set(networkId, await fetchTransfers(network));
+      } catch (e) {
+        console.error(`fetch transfers failed for ${networkId}`, e);
+        cache.set(networkId, []);
+      }
+    }
+    const transfers = cache.get(networkId) ?? [];
+    if (!transfers.length) continue;
+
     const expected = Number(request.amount_usdt);
     const createdAt = new Date(request.created_at as string).getTime() - 10 * 60 * 1000;
 
-    const match = transfers.find((tx: { tx_hash: string; amount: number; timestamp: number }) =>
+    const match = transfers.find((tx) =>
       !usedHashes.has(tx.tx_hash) &&
       tx.timestamp >= createdAt &&
       Math.abs(tx.amount - expected) < 0.005
@@ -154,7 +314,6 @@ async function reconcile(admin: Admin, address: string) {
 
     usedHashes.add(match.tx_hash);
 
-    // marque d'abord la demande (idempotence) puis crédite
     const { data: claimed, error: claimErr } = await admin
       .from("crypto_payments")
       .update({ status: "paid", tx_hash: match.tx_hash, paid_at: new Date().toISOString() })
@@ -174,7 +333,16 @@ async function reconcile(admin: Admin, address: string) {
         provider: "crypto",
         status: "paid",
       });
-      await notifyDiscord(admin, request.user_id as string, amountEur, expected, newBalance, match.tx_hash);
+      await notifyDiscord(
+        admin,
+        request.user_id as string,
+        amountEur,
+        expected,
+        network.token_symbol,
+        network.id,
+        newBalance,
+        match.tx_hash,
+      );
       credited.push({ id: request.id as string, amount_eur: amountEur, tx_hash: match.tx_hash });
     } catch (e) {
       console.error("crypto credit failed, rollback status", e);
@@ -192,10 +360,8 @@ Deno.serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const address = Deno.env.get("TRON_USDT_ADDRESS")?.trim();
 
     if (!SUPABASE_URL || !ANON_KEY || !SERVICE_ROLE) return json({ error: "Missing server configuration" }, 500);
-    if (!address) return json({ error: "TRON_USDT_ADDRESS non configurée" }, 500);
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
@@ -209,6 +375,11 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "check");
+    const networks = await loadNetworks(admin);
+
+    if (action === "networks") {
+      return json({ ok: true, networks: publicNetworks(networks) });
+    }
 
     if (action === "create") {
       const amountEur = Number(body?.amount);
@@ -216,25 +387,30 @@ Deno.serve(async (req) => {
         return json({ error: "Montant invalide (1 € à 5000 €)" }, 400);
       }
 
-      const rate = Number(Deno.env.get("CRYPTO_EUR_USDT_RATE") ?? "1.08"); // 1 € = X USDT
-      const base = amountEur * (Number.isFinite(rate) && rate > 0 ? rate : 1.08);
+      const requestedId = String(body?.network ?? "").trim();
+      const available = networks.filter((n) => n.enabled && n.address);
+      const network = requestedId ? available.find((n) => n.id === requestedId) : available[0];
+      if (!network) return json({ error: "Aucun réseau crypto disponible pour le moment." }, 400);
 
-      // centimes uniques -> identification du payeur
+      const base = amountEur * network.rate_eur;
+
+      // centimes uniques (par réseau) -> identification du payeur
       const { data: activeRows } = await admin
         .from("crypto_payments")
         .select("amount_usdt")
-        .eq("status", "pending");
+        .eq("status", "pending")
+        .eq("network", network.id);
       const taken = new Set((activeRows ?? []).map((r: { amount_usdt: number }) => Number(r.amount_usdt).toFixed(2)));
 
-      let amountUsdt = 0;
+      let amountToken = 0;
       for (let cents = 0; cents < 100; cents += 1) {
         const candidate = +(Math.floor(base * 100) / 100 + cents / 100).toFixed(2);
         if (!taken.has(candidate.toFixed(2))) {
-          amountUsdt = candidate;
+          amountToken = candidate;
           break;
         }
       }
-      if (!amountUsdt) return json({ error: "Trop de paiements en attente, réessaie dans quelques minutes." }, 409);
+      if (!amountToken) return json({ error: "Trop de paiements en attente, réessaie dans quelques minutes." }, 409);
 
       const expiresAt = new Date(Date.now() + EXPIRY_MINUTES * 60 * 1000).toISOString();
       const { data: created, error } = await admin
@@ -242,9 +418,9 @@ Deno.serve(async (req) => {
         .insert({
           user_id: userId,
           amount_eur: +amountEur.toFixed(2),
-          amount_usdt: amountUsdt,
-          address,
-          network: "TRC20",
+          amount_usdt: amountToken,
+          address: network.address,
+          network: network.id,
           status: "pending",
           expires_at: expiresAt,
         })
@@ -252,7 +428,7 @@ Deno.serve(async (req) => {
         .single();
 
       if (error) return json({ error: error.message }, 500);
-      return json({ ok: true, payment: created });
+      return json({ ok: true, payment: { ...created, token_symbol: network.token_symbol, label: network.label } });
     }
 
     if (action === "cancel") {
@@ -263,8 +439,7 @@ Deno.serve(async (req) => {
     }
 
     // action "check" (par défaut) : réconcilie puis renvoie l'état de l'utilisateur
-    const credited = await reconcile(admin, address);
-    const mine = credited.filter(() => true);
+    const credited = await reconcile(admin, networks);
 
     const { data: pending } = await admin
       .from("crypto_payments")
@@ -284,7 +459,15 @@ Deno.serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    return json({ ok: true, pending: pending ?? null, last_paid: lastPaid ?? null, credited_count: mine.length });
+    const pendingNetwork = pending ? networks.find((n) => n.id === String(pending.network)) : null;
+
+    return json({
+      ok: true,
+      networks: publicNetworks(networks),
+      pending: pending ? { ...pending, token_symbol: pendingNetwork?.token_symbol ?? "USDT", label: pendingNetwork?.label ?? pending.network } : null,
+      last_paid: lastPaid ?? null,
+      credited_count: credited.length,
+    });
   } catch (e) {
     console.error("crypto-topup error", e);
     return json({ error: (e as Error).message }, 500);
