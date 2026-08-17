@@ -693,6 +693,33 @@ Deno.serve(async (req) => {
       return json({ ok: true, networks: publicNetworks(networks) });
     }
 
+    // Ajoute dans crypto_networks toutes les cryptos du catalogue qui manquent (désactivées par défaut).
+    if (action === "seed") {
+      const { data: isAdmin } = await admin.rpc("has_role", { _user_id: userId, _role: "admin" }).maybeSingle?.() ?? { data: null };
+      if (isAdmin === false) return json({ error: "Réservé aux admins" }, 403);
+
+      const { data: existing } = await admin.from("crypto_networks").select("id");
+      const have = new Set((existing ?? []).map((r: { id: string }) => String(r.id)));
+      const rows = Object.entries(CATALOG)
+        .filter(([id]) => !have.has(id))
+        .map(([id, meta]) => ({
+          id,
+          label: meta.label,
+          token_symbol: meta.token_symbol,
+          address: "",
+          contract: meta.contract,
+          rate_eur: 0,
+          enabled: false,
+          sort_order: meta.sort_order,
+        }));
+      if (rows.length) {
+        const { error } = await admin.from("crypto_networks").insert(rows);
+        if (error) return json({ error: error.message }, 500);
+      }
+      return json({ ok: true, added: rows.length });
+    }
+
+
     if (action === "create") {
       const amountEur = Number(body?.amount);
       if (!Number.isFinite(amountEur) || amountEur < 1 || amountEur > 5000) {
