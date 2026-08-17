@@ -41,3 +41,7 @@ verify_jwt = true
 
 [functions.super-api]
 verify_jwt = true
+
+[functions.crypto-topup]
+verify_jwt = false
+
