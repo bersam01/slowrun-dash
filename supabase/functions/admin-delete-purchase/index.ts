@@ -1,5 +1,5 @@
 // admin-delete-purchase: supprime un panier (purchases) et recrédite le wallet
-import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,8 +21,8 @@ Deno.serve(async (req) => {
     if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
 
     const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
-    const { data: claims } = await userClient.auth.getClaims(authHeader.replace("Bearer ", ""));
-    const callerId = claims?.claims?.sub as string | undefined;
+    const { data: userData } = await userClient.auth.getUser(authHeader.replace("Bearer ", ""));
+    const callerId = userData?.user?.id as string | undefined;
     if (!callerId) return json({ error: "Unauthorized" }, 401);
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
