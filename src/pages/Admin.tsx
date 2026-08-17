@@ -13,6 +13,16 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
+interface CryptoNetworkRow {
+  id: string;
+  label: string;
+  token_symbol: string;
+  address: string | null;
+  contract: string | null;
+  rate_eur: number;
+  enabled: boolean;
+  sort_order: number;
+}
 interface AdminProfile {
   id: string;
   display_name: string | null;
