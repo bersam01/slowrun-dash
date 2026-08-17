@@ -451,19 +451,32 @@ const Admin = () => {
     load();
   };
 
-  const saveOverdraft = async (userId: string) => {
-    const raw = overdraftDraft[userId];
-    const value = Number(raw);
-    if (!Number.isFinite(value) || value < 0) return toast.error("Valeur invalide (≥ 0)");
+  const applyOverdraft = async (userId: string, value: number) => {
     const { data, error } = await supabase.functions.invoke("super-api", {
       body: { user_id: userId, overdraft_limit_eur: value },
     });
     if (error) return toast.error(error.message);
     if (data?.error) return toast.error(data.error);
-    toast.success(`Découvert défini à ${value.toFixed(2)} €`);
+    toast.success(
+      value >= UNLIMITED_OVERDRAFT
+        ? "Découvert illimité activé"
+        : `Découvert défini à ${value.toFixed(2)} €`
+    );
     setOverdraftDraft((s) => ({ ...s, [userId]: "" }));
     load();
   };
+
+  const saveOverdraft = async (userId: string) => {
+    const raw = overdraftDraft[userId];
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) return toast.error("Valeur invalide (≥ 0)");
+    await applyOverdraft(userId, value);
+  };
+
+  const toggleUnlimitedOverdraft = async (userId: string, next: boolean) => {
+    await applyOverdraft(userId, next ? UNLIMITED_OVERDRAFT : 0);
+  };
+
   const pending = users.filter((u) => u.status === "pending");
   const rejectedUsers = users.filter((u) => u.status === "rejected");
   const refundPreview = (() => {
