@@ -433,7 +433,7 @@ const Credit = () => {
                         variant={activeNetwork?.id === n.id ? "default" : "outline"}
                         onClick={() => setSelectedNetwork(n.id)}
                       >
-                        {n.label}
+                        {n.token_symbol} · {n.label}
                       </Button>
                     ))}
                   </div>
