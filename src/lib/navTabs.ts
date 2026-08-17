@@ -11,5 +11,4 @@ export const HIDEABLE_NAV_TABS: NavTabDef[] = [
   { key: "transactions", label: "Historique", path: "/transactions" },
   { key: "products", label: "Produits", path: "/products" },
   { key: "securite", label: "Sécurité", path: "/securite" },
-  { key: "collab", label: "Collab", path: "/collab" },
 ];
