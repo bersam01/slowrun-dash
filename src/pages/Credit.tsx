@@ -151,10 +151,7 @@ const Credit = () => {
       }
     };
 
-      } catch {
-        // silencieux
-      }
-    };
+
 
     void tick();
     const interval = window.setInterval(tick, CRYPTO_POLL_MS);
