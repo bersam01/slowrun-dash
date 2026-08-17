@@ -213,7 +213,7 @@ const Admin = () => {
   const [roles, setRoles] = useState<MemberRole[]>([]);
   const [rolesError, setRolesError] = useState<string | null>(null);
   const [newRoleName, setNewRoleName] = useState("");
-  const [newRoleColor, setNewRoleColor] = useState(ROLE_COLOR_PALETTE[0]);
+  const [newRoleColor, setNewRoleColor] = useState(ROLE_GRADIENT_PALETTE[0].value);
 
   const loadRoles = async () => {
     const { data, error } = await supabase.from("member_roles").select("*").order("sort_order", { ascending: true });
@@ -747,7 +747,7 @@ const Admin = () => {
                 <div className="flex items-center gap-3">
                   {u.avatar_url && <img src={u.avatar_url} className="h-10 w-10 rounded-full" alt="" />}
                   <div>
-                    <div className="font-medium">{u.display_name ?? "—"} {u.is_admin && <Badge className="ml-1 bg-accent text-accent-foreground">Admin</Badge>} {u.member_tag && <Badge className="ml-1 border-0 text-white" style={{ backgroundColor: roles.find((r) => r.name === u.member_tag)?.color ?? "#7c3aed" }}>{u.member_tag}</Badge>}</div>
+                    <div className="font-medium">{u.display_name ?? "—"} {u.is_admin && <Badge className="ml-1 bg-accent text-accent-foreground">Admin</Badge>} {u.member_tag && <Badge className="ml-1 border-0" style={roleBadgeStyle(roles.find((r) => r.name === u.member_tag)?.color)}>{u.member_tag}</Badge>}</div>
                     <div className="text-xs text-muted-foreground">Discord: {u.discord_id ?? "—"}</div>
                     <div className="mt-1 text-xs">
                       <span className="font-semibold text-primary">Solde : {Number(w?.balance ?? 0).toFixed(2)} q</span>
