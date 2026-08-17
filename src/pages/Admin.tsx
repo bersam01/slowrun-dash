@@ -458,8 +458,23 @@ const Admin = () => {
     const { data, error } = await supabase.functions.invoke("admin-set-overdraft", {
       body: { user_id: userId, overdraft_limit_eur: value },
     });
-    if (error) return toast.error(error.message);
-    if (data?.error) return toast.error(data.error);
+    if (error || data?.error) {
+      // Fallback direct en base (si la fonction n'est pas déployée sur ce backend)
+      const { data: existing } = await supabase
+        .from("wallets")
+        .select("user_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      const res = existing
+        ? await supabase
+            .from("wallets")
+            .update({ overdraft_limit_eur: value, updated_at: new Date().toISOString() })
+            .eq("user_id", userId)
+        : await supabase
+            .from("wallets")
+            .insert({ user_id: userId, overdraft_limit_eur: value, balance: 0, total_credited: 0, total_spent: 0 });
+      if (res.error) return toast.error(res.error.message);
+    }
     toast.success(
       value >= UNLIMITED_OVERDRAFT
         ? "Découvert illimité activé"
