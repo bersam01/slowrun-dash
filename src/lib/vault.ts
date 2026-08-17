@@ -48,3 +48,11 @@ export const formatCardNumber = (value: string) =>
     .slice(0, 19)
     .replace(/(.{4})/g, "$1 ")
     .trim();
+
+export interface VaultPlatform {
+  id: string;
+  name: string;
+  sort_order: number;
+}
+
+export const VAULT_SECTION_LABEL = "Sécurité";
