@@ -545,13 +545,24 @@ const Admin = () => {
             <div className="mt-5 space-y-4">
               {roles.map((role) => (
                 <div key={role.id} className="flex flex-wrap items-center gap-3 border-b border-border/40 pb-4 last:border-0">
-                  <Badge className="border-0 text-white" style={{ backgroundColor: role.color }}>{role.name}</Badge>
+                  <Badge className="border-0" style={roleBadgeStyle(role.color)}>{role.name}</Badge>
                   <Input
                     defaultValue={role.name}
                     onBlur={(e) => renameRole(role, e.target.value)}
                     className="h-8 w-40 text-xs"
                   />
                   <div className="flex flex-wrap items-center gap-1">
+                    {ROLE_GRADIENT_PALETTE.map((g) => (
+                      <button
+                        key={g.value}
+                        type="button"
+                        title={g.label}
+                        aria-label={`Dégradé ${g.label}`}
+                        onClick={() => updateRole(role.id, { color: g.value })}
+                        className={`h-6 w-9 rounded-md border-2 transition ${role.color === g.value ? "border-foreground" : "border-transparent"}`}
+                        style={{ background: g.value }}
+                      />
+                    ))}
                     {ROLE_COLOR_PALETTE.map((c) => (
                       <button
                         key={c}
@@ -564,7 +575,7 @@ const Admin = () => {
                     ))}
                     <Input
                       type="color"
-                      value={role.color}
+                      value={isGradientColor(role.color) ? "#7c3aed" : role.color}
                       onChange={(e) => updateRole(role.id, { color: e.target.value })}
                       className="h-7 w-10 cursor-pointer p-1"
                     />
@@ -574,6 +585,7 @@ const Admin = () => {
                   </Button>
                 </div>
               ))}
+
               {roles.length === 0 && !rolesError && (
                 <p className="text-sm text-muted-foreground">Aucun rôle pour le moment.</p>
               )}
