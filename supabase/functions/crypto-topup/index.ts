@@ -695,7 +695,7 @@ Deno.serve(async (req) => {
 
     // Ajoute dans crypto_networks toutes les cryptos du catalogue qui manquent (désactivées par défaut).
     if (action === "seed") {
-      const { data: isAdmin } = await admin.rpc("has_role", { _user_id: userId, _role: "admin" }).maybeSingle?.() ?? { data: null };
+      const { data: isAdmin } = await admin.rpc("has_role", { _user_id: userId, _role: "admin" });
       if (isAdmin === false) return json({ error: "Réservé aux admins" }, 403);
 
       const { data: existing } = await admin.from("crypto_networks").select("id");
