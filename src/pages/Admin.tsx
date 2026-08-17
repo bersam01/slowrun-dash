@@ -518,11 +518,6 @@ const Admin = () => {
   const totalRefunded = refunds.reduce((sum, r) => sum + Number(r.refund_eur), 0);
   const totalFees = refunds.reduce((sum, r) => sum + Number(r.fee_eur), 0);
 
-  const sharePct = Number(shareConfig.share_pct ?? 50);
-  const partner = users.find((u) => u.id === shareConfig.partner_user_id);
-  const totalCommissionShared = sharedPurchases.reduce((s, p) => s + Number(p.commission ?? 0), 0);
-  const totalDueToPartner = +(totalCommissionShared * sharePct / 100).toFixed(2);
-
   return (
     <DashboardLayout>
       <div className="mb-8">
