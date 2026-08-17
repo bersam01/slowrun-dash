@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2, Calculator, History, AlertCircle, Bitcoin, Crown } from "lucide-react";
+import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2, Calculator, History, AlertCircle, Bitcoin, Crown, Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "@/lib/supabase";
 import { CRYPTO_CATALOG } from "@/lib/cryptoCatalog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AdminVaultTab } from "@/components/AdminVaultTab";
 import { MemberRole, ROLE_COLOR_PALETTE, ROLE_GRADIENT_PALETTE, NO_ROLE_VALUE, roleBadgeStyle, isGradientColor } from "@/lib/memberRoles";
 
 import { toast } from "sonner";
@@ -519,7 +520,7 @@ const Admin = () => {
       </div>
 
       <Tabs defaultValue="approvals" className="mt-8">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-10">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-11">
           <TabsTrigger value="approvals">Approbations ({pending.length})</TabsTrigger>
           <TabsTrigger value="users"><Users className="mr-1 h-4 w-4" />Utilisateurs</TabsTrigger>
           <TabsTrigger value="credits"><Wallet className="mr-1 h-4 w-4" />Crédits</TabsTrigger>
@@ -529,6 +530,7 @@ const Admin = () => {
           <TabsTrigger value="accounting"><Calculator className="mr-1 h-4 w-4" />Comptabilité</TabsTrigger>
           <TabsTrigger value="roles"><Crown className="mr-1 h-4 w-4" />Rôles</TabsTrigger>
           <TabsTrigger value="crypto"><Bitcoin className="mr-1 h-4 w-4" />Crypto</TabsTrigger>
+          <TabsTrigger value="vault"><Lock className="mr-1 h-4 w-4" />Coffre</TabsTrigger>
         </TabsList>
 
         <TabsContent value="roles" className="mt-4">
@@ -1090,6 +1092,9 @@ const Admin = () => {
           </Card>
         </TabsContent>
 
+        <TabsContent value="vault" className="mt-4">
+          <AdminVaultTab users={users} />
+        </TabsContent>
       </Tabs>
 
       <Dialog open={!!historyUser} onOpenChange={(o) => { if (!o) { setHistoryUser(null); setHistoryPurchases([]); setHistoryProducts([]); } }}>

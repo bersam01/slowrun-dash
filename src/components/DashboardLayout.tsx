@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { Badge } from "@/components/ui/badge";
 import { roleBadgeStyle } from "@/lib/memberRoles";
-import { Sparkles, LayoutDashboard, ShieldCheck, Package, LogOut, Wallet, Share2 , History} from "lucide-react";
+import { Sparkles, LayoutDashboard, ShieldCheck, Package, LogOut, Wallet, Share2 , History, Lock} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -78,6 +78,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { to: "/credit", label: "Créditer", icon: Wallet },
     { to: "/transactions", label: "Historique", icon: History },
     { to: "/products", label: "Produits", icon: Package },
+    { to: "/vault", label: "Coffre", icon: Lock },
     ...(partnerCheckDone && isPartner && !isAdmin ? [{ to: "/collab", label: "Collab", icon: Share2 }] : []),
     ...(isAdmin ? [{ to: "/admin", label: "Admin", icon: ShieldCheck }] : []),
   ];
