@@ -182,6 +182,9 @@ const Dashboard = () => {
   })();
 
   const isLoading = authLoading || !profile || loadingData;
+  const statsPending = !hasStats;
+  const purchaseCount = cachedCounts ?? purchases.length + productPurchases.length;
+
 
   return (
     <DashboardLayout>
