@@ -176,13 +176,45 @@ const Admin = () => {
     setCryptoNetworks((data ?? []) as CryptoNetworkRow[]);
   };
 
+  const [seeding, setSeeding] = useState(false);
+
   const seedNetworks = async () => {
-    const { data, error } = await supabase.functions.invoke("crypto-topup", { body: { action: "seed" } });
-    if (error) return toast.error(error.message);
-    const added = Number((data as { added?: number })?.added ?? 0);
-    toast.success(added ? `${added} crypto(s) ajoutée(s)` : "Toutes les cryptos sont déjà présentes");
-    loadNetworks();
+    setSeeding(true);
+    try {
+      const { data: existing, error: readErr } = await supabase.from("crypto_networks").select("id");
+      if (readErr) {
+        toast.error(readErr.message);
+        return;
+      }
+      const have = new Set((existing ?? []).map((r: { id: string }) => String(r.id)));
+      const rows = CRYPTO_CATALOG.filter((c) => !have.has(c.id)).map((c) => ({
+        id: c.id,
+        label: c.label,
+        token_symbol: c.token_symbol,
+        address: "",
+        contract: c.contract,
+        rate_eur: 0,
+        enabled: false,
+        sort_order: c.sort_order,
+      }));
+
+      if (!rows.length) {
+        toast.success("Toutes les cryptos sont déjà présentes");
+        return;
+      }
+
+      const { error } = await supabase.from("crypto_networks").insert(rows);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success(`${rows.length} crypto(s) ajoutée(s)`);
+      loadNetworks();
+    } finally {
+      setSeeding(false);
+    }
   };
+
 
   const saveNetwork = async (id: string, patch: Partial<CryptoNetworkRow>) => {
     const { error } = await supabase
