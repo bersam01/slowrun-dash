@@ -20,7 +20,7 @@ import { CreditCard, Eye, EyeOff, KeyRound, Lock, Plus, ShieldCheck, Trash2 } fr
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { formatCardNumber, maskCard, VAULT_PLATFORMS, type VaultAccount, type VaultCard } from "@/lib/vault";
+import { formatCardNumber, maskCard, VAULT_PLATFORMS, type VaultAccount, type VaultCard, type VaultPlatform } from "@/lib/vault";
 
 const emptyAccount = { platform: VAULT_PLATFORMS[0] as string, label: "", email: "", password: "", phone: "", notes: "" };
 const emptyCard = {
@@ -46,6 +46,7 @@ const Vault = () => {
   const [saving, setSaving] = useState(false);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [missingTables, setMissingTables] = useState(false);
+  const [platforms, setPlatforms] = useState<string[]>([...VAULT_PLATFORMS]);
 
   const load = async () => {
     if (!user) return;
@@ -64,6 +65,18 @@ const Vault = () => {
     setCards((c.data ?? []) as VaultCard[]);
     setLoading(false);
   };
+
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from("vault_platforms")
+        .select("*")
+        .order("sort_order", { ascending: true });
+      if (!error && (data ?? []).length) {
+        setPlatforms(((data ?? []) as VaultPlatform[]).map((p) => p.name));
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     if (user) load();
@@ -87,7 +100,7 @@ const Vault = () => {
     });
     setSaving(false);
     if (error) return toast.error(error.message);
-    toast.success("Compte ajouté au coffre");
+    toast.success("Compte enregistré");
     setAccountForm(emptyAccount);
     setAccountOpen(false);
     load();
@@ -116,21 +129,21 @@ const Vault = () => {
     });
     setSaving(false);
     if (error) return toast.error(error.message);
-    toast.success("Carte ajoutée au coffre");
+    toast.success("Carte enregistrée");
     setCardForm(emptyCard);
     setCardOpen(false);
     load();
   };
 
   const removeAccount = async (id: string) => {
-    if (!confirm("Supprimer ce compte du coffre ?")) return;
+    if (!confirm("Supprimer ce compte ?")) return;
     const { error } = await supabase.from("vault_accounts").delete().eq("id", id);
     if (error) return toast.error(error.message);
     setAccounts((prev) => prev.filter((a) => a.id !== id));
   };
 
   const removeCard = async (id: string) => {
-    if (!confirm("Supprimer cette carte du coffre ?")) return;
+    if (!confirm("Supprimer cette carte ?")) return;
     const { error } = await supabase.from("vault_cards").delete().eq("id", id);
     if (error) return toast.error(error.message);
     setCards((prev) => prev.filter((c) => c.id !== id));
@@ -144,7 +157,7 @@ const Vault = () => {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
             <Lock className="h-6 w-6 text-primary" />
-            Coffre
+            Sécurité
           </h1>
           <p className="text-sm text-muted-foreground">
             Tes comptes billetterie et tes cartes, utilisés lors de la réservation de tes paniers.
@@ -158,7 +171,7 @@ const Vault = () => {
 
       {missingTables && (
         <Card className="mb-6 border-destructive/40 bg-destructive/10 p-4 text-sm">
-          Le coffre n'est pas encore initialisé côté base de données (script <code>sql/vault.sql</code> à exécuter).
+          L'espace sécurité n'est pas encore initialisé côté base de données (script <code>sql/vault.sql</code> à exécuter).
         </Card>
       )}
 
@@ -267,7 +280,7 @@ const Vault = () => {
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {VAULT_PLATFORMS.map((p) => (
+                  {platforms.map((p) => (
                     <SelectItem key={p} value={p}>{p}</SelectItem>
                   ))}
                 </SelectContent>

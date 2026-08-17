@@ -530,7 +530,7 @@ const Admin = () => {
           <TabsTrigger value="accounting"><Calculator className="mr-1 h-4 w-4" />Comptabilité</TabsTrigger>
           <TabsTrigger value="roles"><Crown className="mr-1 h-4 w-4" />Rôles</TabsTrigger>
           <TabsTrigger value="crypto"><Bitcoin className="mr-1 h-4 w-4" />Crypto</TabsTrigger>
-          <TabsTrigger value="vault"><Lock className="mr-1 h-4 w-4" />Coffre</TabsTrigger>
+          <TabsTrigger value="vault"><Lock className="mr-1 h-4 w-4" />Sécurité</TabsTrigger>
         </TabsList>
 
         <TabsContent value="roles" className="mt-4">
