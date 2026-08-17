@@ -45,6 +45,7 @@ const Credit = () => {
   const [networks, setNetworks] = useState<CryptoNetwork[]>([]);
   const [selectedNetwork, setSelectedNetwork] = useState<string>("");
   const cryptoPaymentRef = useRef<CryptoPayment | null>(null);
+  const notifiedCryptoPaymentRef = useRef<string | null>(null);
   cryptoPaymentRef.current = cryptoPayment;
 
 
@@ -136,16 +137,21 @@ const Credit = () => {
 
         const pending = (payload?.pending ?? null) as CryptoPayment | null;
         const current = cryptoPaymentRef.current;
+        const lastPaid = payload?.last_paid as (CryptoPayment & { paid_at?: string }) | null;
 
-        if (current && !pending) {
-          setCryptoPayment(null);
-          const lastPaid = payload?.last_paid;
-          if (lastPaid) {
+        if (current && lastPaid?.id === current.id) {
+          setCryptoPayment(pending?.id !== current.id ? pending : null);
+          if (notifiedCryptoPaymentRef.current !== lastPaid.id) {
+            notifiedCryptoPaymentRef.current = lastPaid.id;
             toast.success("🪙 Paiement crypto reçu !", {
               description: `${Number(lastPaid.amount_eur ?? 0).toFixed(2)} € ont été ajoutés à ton solde.`,
               duration: 8000,
             });
           }
+        } else if (current && !pending) {
+          setCryptoPayment(null);
+        } else if (current && pending?.id !== current.id) {
+          setCryptoPayment(pending);
         } else if (!current && pending) {
           setCryptoPayment(pending);
         }
