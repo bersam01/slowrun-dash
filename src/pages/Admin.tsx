@@ -518,9 +518,10 @@ const Admin = () => {
               une adresse EVM couvre ETH / BNB / Base / Arbitrum / Optimism / Polygon / Avalanche, une adresse Solana couvre SOL + USDC/USDT SPL,
               une adresse TRON couvre TRX + USDT TRC20. Laisse le taux à 0 pour utiliser le prix live du marché.
             </p>
-            <Button className="mt-3" size="sm" variant="outline" onClick={seedNetworks}>
-              Ajouter toutes les cryptos disponibles
+            <Button className="mt-3" size="sm" variant="outline" onClick={seedNetworks} disabled={seeding}>
+              {seeding ? "Ajout en cours…" : "Ajouter toutes les cryptos disponibles"}
             </Button>
+
 
             {cryptoNetworks.length === 0 ? (
               <p className="mt-4 text-sm text-muted-foreground">
