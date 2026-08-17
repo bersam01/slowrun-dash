@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "@/lib/supabase";
 import { CRYPTO_CATALOG } from "@/lib/cryptoCatalog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MemberRole, ROLE_COLOR_PALETTE, NO_ROLE_VALUE } from "@/lib/memberRoles";
+import { MemberRole, ROLE_COLOR_PALETTE, ROLE_GRADIENT_PALETTE, NO_ROLE_VALUE, roleBadgeStyle, isGradientColor, DEFAULT_ROLE_COLOR } from "@/lib/memberRoles";
 
 import { toast } from "sonner";
 
