@@ -5,13 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2, Calculator, Share2, History, AlertCircle, Bitcoin } from "lucide-react";
+import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2, Calculator, Share2, History, AlertCircle, Bitcoin, Crown } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "@/lib/supabase";
 import { CRYPTO_CATALOG } from "@/lib/cryptoCatalog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MemberRole, ROLE_COLOR_PALETTE, NO_ROLE_VALUE } from "@/lib/memberRoles";
 
 import { toast } from "sonner";
 
@@ -233,6 +235,63 @@ const Admin = () => {
 
 
 
+  const [roles, setRoles] = useState<MemberRole[]>([]);
+  const [rolesError, setRolesError] = useState<string | null>(null);
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleColor, setNewRoleColor] = useState(ROLE_COLOR_PALETTE[0]);
+
+  const loadRoles = async () => {
+    const { data, error } = await supabase.from("member_roles").select("*").order("sort_order", { ascending: true });
+    if (error) { setRolesError(error.message); setRoles([]); return; }
+    setRolesError(null);
+    setRoles((data ?? []) as MemberRole[]);
+  };
+
+  const createRole = async () => {
+    const name = newRoleName.trim();
+    if (!name) return toast.error("Donne un nom au rôle");
+    const { error } = await supabase.from("member_roles").insert({ name, color: newRoleColor, sort_order: roles.length });
+    if (error) return toast.error(error.message);
+    setNewRoleName("");
+    toast.success(`Rôle ${name} créé`);
+    loadRoles();
+  };
+
+  const updateRole = async (id: string, patch: Partial<MemberRole>) => {
+    const { error } = await supabase.from("member_roles").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) return toast.error(error.message);
+    setRoles((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  };
+
+  const renameRole = async (role: MemberRole, nextName: string) => {
+    const name = nextName.trim();
+    if (!name || name === role.name) return;
+    const { error } = await supabase.from("member_roles").update({ name, updated_at: new Date().toISOString() }).eq("id", role.id);
+    if (error) return toast.error(error.message);
+    await supabase.from("profiles").update({ member_tag: name }).eq("member_tag", role.name);
+    toast.success("Rôle renommé");
+    loadRoles();
+    load();
+  };
+
+  const deleteRole = async (role: MemberRole) => {
+    if (!confirm(`Supprimer le rôle ${role.name} ? Il sera retiré des membres concernés.`)) return;
+    const { error } = await supabase.from("member_roles").delete().eq("id", role.id);
+    if (error) return toast.error(error.message);
+    await supabase.from("profiles").update({ member_tag: null }).eq("member_tag", role.name);
+    toast.success("Rôle supprimé");
+    loadRoles();
+    load();
+  };
+
+  const assignRole = async (userId: string, value: string) => {
+    const newTag = value === NO_ROLE_VALUE ? null : value;
+    const { error } = await supabase.from("profiles").update({ member_tag: newTag }).eq("id", userId);
+    if (error) return toast.error(error.message);
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, member_tag: newTag } : u)));
+    toast.success(newTag ? `Rôle ${newTag} attribué` : "Rôle retiré");
+  };
+
   const load = async () => {
     const [u, c, p, pu, pr, w, rf, sc] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
@@ -272,6 +331,7 @@ const Admin = () => {
   useEffect(() => {
     load();
     loadNetworks();
+    loadRoles();
     // Realtime subscription on wallets so balances update live
     const channel = supabase
       .channel("admin-wallets")
@@ -381,14 +441,6 @@ const Admin = () => {
     if (error) return toast.error(error.message);
     toast.success(`Remboursement enregistré : ${refund_eur.toFixed(2)} €`);
     setRefundForm({ user_id: "", amount: "", note: "" });
-    load();
-  };
-
-  const toggleVip = async (userId: string, currentTag: string | null) => {
-    const newTag = currentTag === "VIP" ? null : "VIP";
-    const { error } = await supabase.from("profiles").update({ member_tag: newTag }).eq("id", userId);
-    if (error) return toast.error(error.message);
-    toast.success(newTag ? "Rôle VIP ajouté" : "Rôle VIP retiré");
     load();
   };
 
@@ -536,7 +588,7 @@ const Admin = () => {
       </div>
 
       <Tabs defaultValue="approvals" className="mt-8">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-9">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-10">
           <TabsTrigger value="approvals">Approbations ({pending.length})</TabsTrigger>
           <TabsTrigger value="users"><Users className="mr-1 h-4 w-4" />Utilisateurs</TabsTrigger>
           <TabsTrigger value="credits"><Wallet className="mr-1 h-4 w-4" />Crédits</TabsTrigger>
@@ -545,8 +597,90 @@ const Admin = () => {
           <TabsTrigger value="purchases"><ShoppingCart className="mr-1 h-4 w-4" />Achats</TabsTrigger>
           <TabsTrigger value="accounting"><Calculator className="mr-1 h-4 w-4" />Comptabilité</TabsTrigger>
           <TabsTrigger value="share"><Share2 className="mr-1 h-4 w-4" />Partage</TabsTrigger>
+          <TabsTrigger value="roles"><Crown className="mr-1 h-4 w-4" />Rôles</TabsTrigger>
           <TabsTrigger value="crypto"><Bitcoin className="mr-1 h-4 w-4" />Crypto</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="roles" className="mt-4">
+          <Card className="glass-card p-6">
+            <h3 className="text-lg font-semibold">Rôles des membres</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Crée, renomme, colore ou supprime les rôles affichés sur les profils.</p>
+
+            {rolesError && (
+              <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                Impossible de charger les rôles : {rolesError}
+              </div>
+            )}
+
+            <div className="mt-5 space-y-4">
+              {roles.map((role) => (
+                <div key={role.id} className="flex flex-wrap items-center gap-3 border-b border-border/40 pb-4 last:border-0">
+                  <Badge className="border-0 text-white" style={{ backgroundColor: role.color }}>{role.name}</Badge>
+                  <Input
+                    defaultValue={role.name}
+                    onBlur={(e) => renameRole(role, e.target.value)}
+                    className="h-8 w-40 text-xs"
+                  />
+                  <div className="flex flex-wrap items-center gap-1">
+                    {ROLE_COLOR_PALETTE.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        aria-label={`Couleur ${c}`}
+                        onClick={() => updateRole(role.id, { color: c })}
+                        className={`h-6 w-6 rounded-full border-2 transition ${role.color === c ? "border-foreground" : "border-transparent"}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                    <Input
+                      type="color"
+                      value={role.color}
+                      onChange={(e) => updateRole(role.id, { color: e.target.value })}
+                      className="h-7 w-10 cursor-pointer p-1"
+                    />
+                  </div>
+                  <Button size="sm" variant="destructive" onClick={() => deleteRole(role)}>
+                    <Trash2 className="mr-1 h-4 w-4" />Supprimer
+                  </Button>
+                </div>
+              ))}
+              {roles.length === 0 && !rolesError && (
+                <p className="text-sm text-muted-foreground">Aucun rôle pour le moment.</p>
+              )}
+            </div>
+
+            <div className="mt-6 rounded-lg border border-border/60 p-4">
+              <Label className="text-sm">Nouveau rôle</Label>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <Input
+                  placeholder="Nom du rôle (ex: VIP)"
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  className="h-9 w-48"
+                />
+                <div className="flex flex-wrap items-center gap-1">
+                  {ROLE_COLOR_PALETTE.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      aria-label={`Couleur ${c}`}
+                      onClick={() => setNewRoleColor(c)}
+                      className={`h-6 w-6 rounded-full border-2 transition ${newRoleColor === c ? "border-foreground" : "border-transparent"}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                  <Input
+                    type="color"
+                    value={newRoleColor}
+                    onChange={(e) => setNewRoleColor(e.target.value)}
+                    className="h-7 w-10 cursor-pointer p-1"
+                  />
+                </div>
+                <Button size="sm" onClick={createRole}><Plus className="mr-1 h-4 w-4" />Créer</Button>
+              </div>
+            </div>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="crypto" className="mt-4">
           <Card className="glass-card p-6">
@@ -659,7 +793,7 @@ const Admin = () => {
                 <div className="flex items-center gap-3">
                   {u.avatar_url && <img src={u.avatar_url} className="h-10 w-10 rounded-full" alt="" />}
                   <div>
-                    <div className="font-medium">{u.display_name ?? "—"} {u.is_admin && <Badge className="ml-1 bg-accent text-accent-foreground">Admin</Badge>} {u.member_tag === "VIP" && <Badge className="ml-1 bg-gradient-to-r from-primary to-accent text-primary-foreground">VIP</Badge>}</div>
+                    <div className="font-medium">{u.display_name ?? "—"} {u.is_admin && <Badge className="ml-1 bg-accent text-accent-foreground">Admin</Badge>} {u.member_tag && <Badge className="ml-1 border-0 text-white" style={{ backgroundColor: roles.find((r) => r.name === u.member_tag)?.color ?? "#7c3aed" }}>{u.member_tag}</Badge>}</div>
                     <div className="text-xs text-muted-foreground">Discord: {u.discord_id ?? "—"}</div>
                     <div className="mt-1 text-xs">
                       <span className="font-semibold text-primary">Solde : {Number(w?.balance ?? 0).toFixed(2)} q</span>
@@ -717,9 +851,20 @@ const Admin = () => {
                     </div>
                   </div>
 
-                  <Button size="sm" variant={u.member_tag === "VIP" ? "destructive" : "outline"} onClick={() => toggleVip(u.id, u.member_tag)}>
-                    {u.member_tag === "VIP" ? "Retirer VIP" : "+ VIP"}
-                  </Button>
+                  <Select value={u.member_tag ?? NO_ROLE_VALUE} onValueChange={(v) => assignRole(u.id, v)}>
+                    <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Rôle" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_ROLE_VALUE}>Aucun rôle</SelectItem>
+                      {roles.map((r) => (
+                        <SelectItem key={r.id} value={r.name}>
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: r.color }} />
+                            {r.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button size="sm" variant="outline" onClick={() => openHistory(u)}>
                     <History className="mr-1 h-4 w-4" />Voir achats
                   </Button>

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { Badge } from "@/components/ui/badge";
+import { DEFAULT_ROLE_COLOR } from "@/lib/memberRoles";
 import { Sparkles, LayoutDashboard, ShieldCheck, Package, LogOut, Wallet, Share2 , History} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
@@ -18,6 +19,18 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const [isPartner, setIsPartner] = useState(false);
   const [partnerCheckDone, setPartnerCheckDone] = useState(false);
+  const [roleColor, setRoleColor] = useState<string | null>(null);
+
+  useEffect(() => {
+    const tag = profile?.member_tag;
+    if (!tag) { setRoleColor(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("member_roles").select("color").eq("name", tag).maybeSingle();
+      if (!cancelled) setRoleColor((data as { color?: string } | null)?.color ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [profile?.member_tag]);
 
   useEffect(() => {
     if (loading) return;
@@ -103,13 +116,14 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                   <img src={profile.avatar_url} alt="" className="h-7 w-7 rounded-full" />
                 )}
                 <span className="text-sm font-medium">{profile.display_name ?? "User"}</span>
-                {profile.member_tag === "VIP" && (
+                {profile.member_tag && (
                   <Badge
                     variant="default"
-                    className="ml-1 gap-1 bg-gradient-to-r from-primary to-accent px-2 py-0.5 text-[10px] uppercase tracking-wider text-primary-foreground"
+                    className="ml-1 gap-1 border-0 px-2 py-0.5 text-[10px] uppercase tracking-wider text-white"
+                    style={{ backgroundColor: roleColor ?? DEFAULT_ROLE_COLOR }}
                   >
                     <Sparkles className="h-3 w-3" />
-                    VIP
+                    {profile.member_tag}
                   </Badge>
                 )}
               </div>
