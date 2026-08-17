@@ -978,13 +978,8 @@ const Admin = () => {
                 <div className="min-w-0">
                   <div className="font-medium truncate">{p.event_name}</div>
                   <div className="text-xs text-muted-foreground">{p.profiles?.display_name ?? "—"} • {p.store} • Qté {p.quantity}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>Source bot : {inferPurchaseBot(p) || "—"}</span>
-                    {shareConfig.bot_name && !matchesBotName(inferPurchaseBot(p), shareConfig.bot_name) && (
-                      <Button size="sm" variant="outline" onClick={() => assignPurchaseToTrackedBot(p.id)}>
-                        Ajouter à {shareConfig.bot_name}
-                      </Button>
-                    )}
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Source bot : {inferPurchaseBot(p) || "—"}
                   </div>
                 </div>
                 <div className="text-right">
