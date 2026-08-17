@@ -11,6 +11,7 @@ export interface Profile {
   avatar_url: string | null;
   status: ProfileStatus;
   is_admin: boolean;
+  member_tag: string | null;
   created_at: string;
 }
 
