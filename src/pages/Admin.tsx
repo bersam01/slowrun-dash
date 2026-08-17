@@ -106,22 +106,6 @@ interface RefundRow {
 
 const UNLIMITED_OVERDRAFT = 1000000;
 
-const normalizeBotName = (value: string | null | undefined) =>
-
-  String(value ?? "")
-    .normalize("NFKD")
-    .replace(/[•·].*$/u, "")
-    .replace(/\bv?\d+(?:\.\d+)+(?:\b.*)?$/i, "")
-    .replace(/[^a-z0-9]+/gi, "")
-    .toLowerCase()
-    .trim();
-
-const matchesBotName = (sourceBot: string | null | undefined, configuredBot: string | null | undefined) => {
-  const source = normalizeBotName(sourceBot);
-  const configured = normalizeBotName(configuredBot);
-  if (!source || !configured) return false;
-  return source === configured || source.startsWith(configured) || configured.startsWith(source);
-};
 
 const inferPurchaseBot = (purchase: PurchaseRow) => {
   if (purchase.source_bot) return purchase.source_bot;
