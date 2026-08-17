@@ -11,6 +11,7 @@ import Legal from "./pages/Legal.tsx";
 import Pending from "./pages/Pending.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
 import Credit from "./pages/Credit.tsx";
+import Transactions from "./pages/Transactions.tsx";
 import Products from "./pages/Products.tsx";
 import Admin from "./pages/Admin.tsx";
 import Collab from "./pages/Collab.tsx";
@@ -35,6 +36,7 @@ const App = () => (
           <Route path="/pending" element={<Pending />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/credit" element={<ProtectedRoute><Credit /></ProtectedRoute>} />
+          <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
           <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
           <Route path="/collab" element={<ProtectedRoute><Collab /></ProtectedRoute>} />
