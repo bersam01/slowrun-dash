@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2, Calculator, History, AlertCircle, Bitcoin, Crown, Lock } from "lucide-react";
+import { Check, X, Users, Wallet, ShoppingCart, Plus, Minus, Package, Trash2, Calculator, History, AlertCircle, Bitcoin, Crown, Lock, Eye } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -14,6 +14,8 @@ import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "@/lib/supab
 import { CRYPTO_CATALOG } from "@/lib/cryptoCatalog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AdminVaultTab } from "@/components/AdminVaultTab";
+import { HIDEABLE_NAV_TABS } from "@/lib/navTabs";
+import { useNavVisibility } from "@/hooks/useNavVisibility";
 import { MemberRole, ROLE_COLOR_PALETTE, ROLE_GRADIENT_PALETTE, NO_ROLE_VALUE, roleBadgeStyle, isGradientColor } from "@/lib/memberRoles";
 
 import { toast } from "sonner";
@@ -210,6 +212,18 @@ const Admin = () => {
   };
 
 
+
+  const { hiddenMap, refresh: refreshNavVisibility } = useNavVisibility();
+  const [navSaving, setNavSaving] = useState<string | null>(null);
+
+  const toggleNavTab = async (key: string, hidden: boolean) => {
+    setNavSaving(key);
+    const { error } = await supabase.from("nav_visibility").upsert({ key, hidden, updated_at: new Date().toISOString() }, { onConflict: "key" });
+    setNavSaving(null);
+    if (error) { toast.error("Erreur : " + error.message); return; }
+    await refreshNavVisibility();
+    toast.success(hidden ? "Onglet masqué aux membres" : "Onglet visible pour tous");
+  };
 
   const [roles, setRoles] = useState<MemberRole[]>([]);
   const [rolesError, setRolesError] = useState<string | null>(null);
@@ -520,7 +534,7 @@ const Admin = () => {
       </div>
 
       <Tabs defaultValue="approvals" className="mt-8">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-11">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-12">
           <TabsTrigger value="approvals">Approbations ({pending.length})</TabsTrigger>
           <TabsTrigger value="users"><Users className="mr-1 h-4 w-4" />Utilisateurs</TabsTrigger>
           <TabsTrigger value="credits"><Wallet className="mr-1 h-4 w-4" />Crédits</TabsTrigger>
@@ -531,7 +545,40 @@ const Admin = () => {
           <TabsTrigger value="roles"><Crown className="mr-1 h-4 w-4" />Rôles</TabsTrigger>
           <TabsTrigger value="crypto"><Bitcoin className="mr-1 h-4 w-4" />Crypto</TabsTrigger>
           <TabsTrigger value="vault"><Lock className="mr-1 h-4 w-4" />Sécurité</TabsTrigger>
+          <TabsTrigger value="navtabs"><Eye className="mr-1 h-4 w-4" />Onglets</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="navtabs" className="mt-4">
+          <Card className="glass-card p-6">
+            <h3 className="text-lg font-semibold">Visibilité des onglets</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Masque un onglet aux membres (maintenance, tests…). Les admins voient toujours tout.
+            </p>
+            <div className="mt-4 space-y-2">
+              {HIDEABLE_NAV_TABS.map((tab) => {
+                const hidden = Boolean(hiddenMap[tab.key]);
+                return (
+                  <div key={tab.key} className="flex items-center justify-between rounded-lg border border-border/50 bg-secondary/20 px-4 py-3">
+                    <div>
+                      <div className="font-medium">{tab.label}</div>
+                      <div className="text-xs text-muted-foreground">{tab.path}</div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={hidden ? "text-xs text-warning" : "text-xs text-muted-foreground"}>
+                        {hidden ? "Masqué aux membres" : "Visible"}
+                      </span>
+                      <Switch
+                        checked={!hidden}
+                        disabled={navSaving === tab.key}
+                        onCheckedChange={(checked) => toggleNavTab(tab.key, !checked)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="roles" className="mt-4">
           <Card className="glass-card p-6">
