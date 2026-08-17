@@ -65,17 +65,23 @@ const Credit = () => {
     return payload;
   }, []);
 
+  const activeNetwork = networks.find((n) => n.id === selectedNetwork) ?? networks[0] ?? null;
+
   const handleCryptoCreate = async () => {
     if (amount < 1) {
       toast.error("Le montant minimum est de 1 €.");
       return;
     }
+    if (!activeNetwork) {
+      toast.error("Aucune devise crypto disponible.");
+      return;
+    }
     setCryptoLoading(true);
     try {
-      const payload = await callCrypto({ action: "create", amount });
+      const payload = await callCrypto({ action: "create", amount, network: activeNetwork.id });
       setCryptoPayment(payload.payment as CryptoPayment);
       toast.success("Adresse de paiement générée", {
-        description: "Envoie le montant EXACT en USDT (TRC20).",
+        description: `Envoie le montant EXACT en ${activeNetwork.token_symbol} (${activeNetwork.label}).`,
       });
     } catch (err) {
       toast.error((err as Error).message);
@@ -95,7 +101,25 @@ const Credit = () => {
     setCryptoPayment(null);
   };
 
-  // Polling automatique: détecte le virement USDT et crédite le solde
+  // Charge les devises crypto activées par l'admin
+  useEffect(() => {
+    if (!profile?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const payload = await callCrypto({ action: "networks" });
+        if (cancelled) return;
+        const list = (payload?.networks ?? []) as CryptoNetwork[];
+        setNetworks(list);
+        setSelectedNetwork((prev) => (list.some((n) => n.id === prev) ? prev : list[0]?.id ?? ""));
+      } catch {
+        // silencieux
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [profile?.id, callCrypto]);
+
+  // Polling automatique: détecte le virement crypto et crédite le solde
   useEffect(() => {
     if (!profile?.id) return;
 
@@ -105,6 +129,8 @@ const Credit = () => {
         const payload = await callCrypto({ action: "check" });
         if (cancelled) return;
 
+        if (Array.isArray(payload?.networks)) setNetworks(payload.networks as CryptoNetwork[]);
+
         const pending = (payload?.pending ?? null) as CryptoPayment | null;
         const current = cryptoPaymentRef.current;
 
@@ -112,7 +138,7 @@ const Credit = () => {
           setCryptoPayment(null);
           const lastPaid = payload?.last_paid;
           if (lastPaid) {
-            toast.success("🪙 Paiement USDT reçu !", {
+            toast.success("🪙 Paiement crypto reçu !", {
               description: `${Number(lastPaid.amount_eur ?? 0).toFixed(2)} € ont été ajoutés à ton solde.`,
               duration: 8000,
             });
@@ -120,6 +146,11 @@ const Credit = () => {
         } else if (!current && pending) {
           setCryptoPayment(pending);
         }
+      } catch {
+        // silencieux
+      }
+    };
+
       } catch {
         // silencieux
       }
