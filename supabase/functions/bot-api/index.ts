@@ -332,16 +332,26 @@ Deno.serve(async (req) => {
 
       const { data: wallet } = await admin
         .from("wallets")
-        .select("balance, total_credited, total_spent")
+        .select("balance, total_credited, total_spent, overdraft_limit_eur")
         .eq("user_id", userId)
         .maybeSingle();
 
+      const realBalance = Number(wallet?.balance ?? 0);
+      const overdraft = Number(wallet?.overdraft_limit_eur ?? 0);
+      const available = +(realBalance + overdraft).toFixed(2);
+
       return json({
-        balance: Number(wallet?.balance ?? 0),
+        // "balance" = solde dépensable (inclut le découvert autorisé) pour que le bot
+        // laisse claim les paniers même si le solde réel est à 0 ou négatif.
+        balance: available,
+        available,
+        real_balance: realBalance,
+        overdraft_limit_eur: overdraft,
         total_credited: Number(wallet?.total_credited ?? 0),
         total_spent: Number(wallet?.total_spent ?? 0),
         display_name: profile?.display_name ?? null,
       });
+
     }
 
     if (action === "history") {
